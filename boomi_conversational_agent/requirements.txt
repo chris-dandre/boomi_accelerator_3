@@ -1,0 +1,24 @@
+# Boomi Conversational Agent Requirements
+# Phase 5: CLI Agent Foundation
+
+# Core dependencies for CLI agent
+anthropic>=0.7.0          # Claude 4.0 integration
+pydantic>=2.0.0           # Data validation and settings
+typing-extensions>=4.0.0  # Enhanced type hints
+python-dotenv>=1.0.0      # Environment variable management
+
+# Testing framework (TDD approach)
+pytest>=7.4.0            # Testing framework
+pytest-cov>=4.1.0        # Test coverage reporting
+pytest-mock>=3.11.1      # Mocking framework
+pytest-asyncio>=0.21.0   # Async testing support
+
+# MCP and HTTP dependencies
+fastmcp>=0.1.0             # FastMCP framework
+mcp>=0.1.0                 # Model Context Protocol
+requests>=2.31.0           # HTTP requests (needed by Boomi clients)
+httpx>=0.24.0              # Async HTTP client
+aiohttp>=3.8.0             # Additional async HTTP support
+
+# MCP integration (will reference existing implementation)
+# Note: We'll import from ../boomi_datahub_mcp_server/boomi_mcp_server/

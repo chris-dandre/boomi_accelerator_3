@@ -1,0 +1,56 @@
+# requirements.txt
+
+python-dotenv
+requests
+numpy
+pandas
+scipy
+torch           # pip name for pytorch
+jupyterlab
+ipywidgets
+matplotlib
+scikit-learn
+chromadb
+jupyter-dash
+# sentencepiece
+pyarrow
+faiss-cpu       # May require conda or special wheels
+fastapi
+uvicorn
+python-jose[cryptography]
+# mcp           # Not available on PyPI; may need to skip or install manually
+
+# pip-only dependencies
+beautifulsoup4
+plotly
+bitsandbytes
+transformers
+sentence-transformers
+datasets
+accelerate
+openai
+anthropic
+google-generativeai
+gradio
+gensim
+modal
+ollama
+psutil
+setuptools
+speedtest-cli
+langchain
+langchain-core
+langchain-text-splitters
+langchain-openai
+langchain-chroma
+langchain-community
+faiss-cpu
+feedparser
+twilio
+pydub
+seaborn
+plotly
+streamlit
+joblib
+simple_salesforce
+fastmcp

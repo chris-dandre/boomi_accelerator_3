@@ -1,0 +1,37 @@
+[
+  {
+    "name": "platform-users",
+    "id": "ea228582-91a6-4818-9f7d-bff2d9d4ed56",
+    "publicationStatus": "publish",
+    "published": true,
+    "latestVersion": "1"
+  },
+  {
+    "name": "Advertisements",
+    "id": "02367877-e560-4d82-b640-6a9f7ab96afa",
+    "publicationStatus": "publish",
+    "published": true,
+    "latestVersion": "4"
+  },
+  {
+    "name": "opportunity",
+    "id": "cb5053d0-c97b-4d20-b208-346e6f0a1e0b",
+    "publicationStatus": "publish",
+    "published": true,
+    "latestVersion": "2"
+  },
+  {
+    "name": "Engagements",
+    "id": "4f56db1f-b5bd-49b2-af68-b4d622b71996",
+    "publicationStatus": "publish",
+    "published": true,
+    "latestVersion": "6"
+  },
+  {
+    "name": "users",
+    "id": "674108ee-4018-481a-ae7c-7becd6c6fa37",
+    "publicationStatus": "publish",
+    "published": true,
+    "latestVersion": "5"
+  }
+]

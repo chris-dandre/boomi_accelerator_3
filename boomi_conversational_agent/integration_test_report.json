@@ -1,0 +1,114 @@
+{
+  "test_mode": "REAL",
+  "timestamp": "2025-07-01 18:44:07",
+  "summary": {
+    "total_tests": 16,
+    "successful_tests": 7,
+    "success_rate": 43.75
+  },
+  "detailed_results": [
+    {
+      "test": "System Health Check",
+      "success": true,
+      "details": {
+        "pipeline_status": "healthy",
+        "connection_status": "connected",
+        "agent_health": "all_operational"
+      },
+      "execution_time": 0
+    },
+    {
+      "test": "Basic Query: How many models are there?",
+      "success": false,
+      "execution_time": 2764.9917602539062,
+      "response_preview": "Data retrieval failed: 400 Client Error: Bad Request for url: https://api.boomi.com/mdm/api/rest/v1/..."
+    },
+    {
+      "test": "Basic Query: Show me available data models",
+      "success": false,
+      "execution_time": 2619.8995113372803,
+      "response_preview": "Data retrieval failed: 400 Client Error: Bad Request for url: https://api.boomi.com/mdm/api/rest/v1/..."
+    },
+    {
+      "test": "Basic Query: What data do we have?",
+      "success": false,
+      "execution_time": 0.40793418884277344,
+      "response_preview": "Unable to understand the query..."
+    },
+    {
+      "test": "COUNT Query: How many products do we have?",
+      "success": false,
+      "expected_type": "COUNT",
+      "detected_type": "UNKNOWN",
+      "execution_time": 4414.915323257446
+    },
+    {
+      "test": "COUNT Query: Count the number of records",
+      "success": false,
+      "expected_type": "COUNT",
+      "detected_type": "UNKNOWN",
+      "execution_time": 2626.2693405151367
+    },
+    {
+      "test": "LIST Query: Show me the data models",
+      "success": false,
+      "expected_type": "LIST",
+      "detected_type": "UNKNOWN",
+      "execution_time": 2602.1549701690674
+    },
+    {
+      "test": "LIST Query: List available information",
+      "success": false,
+      "expected_type": "LIST",
+      "detected_type": "UNKNOWN",
+      "execution_time": 2818.3341026306152
+    },
+    {
+      "test": "COMPARE Query: Compare model sizes",
+      "success": false,
+      "expected_type": "COMPARE",
+      "detected_type": "UNKNOWN",
+      "execution_time": 4170.295715332031
+    },
+    {
+      "test": "COMPARE Query: Compare data volumes",
+      "success": false,
+      "expected_type": "COMPARE",
+      "detected_type": "UNKNOWN",
+      "execution_time": 4333.226919174194
+    },
+    {
+      "test": "Error Handling: ''",
+      "success": true,
+      "handled_gracefully": true
+    },
+    {
+      "test": "Error Handling: '   '",
+      "success": true,
+      "handled_gracefully": true
+    },
+    {
+      "test": "Error Handling: 'asdfghjkl'",
+      "success": true,
+      "handled_gracefully": true
+    },
+    {
+      "test": "Error Handling: 'SQL injection attempt; DROP TABLE users;'",
+      "success": true,
+      "handled_gracefully": true
+    },
+    {
+      "test": "Performance & Caching",
+      "success": true,
+      "first_execution_ms": 2500.4918575286865,
+      "second_execution_ms": 2559.659957885742,
+      "cache_effective": false
+    },
+    {
+      "test": "Configuration Management",
+      "success": true,
+      "update_success": true,
+      "config_applied": true
+    }
+  ]
+}

@@ -1,0 +1,1010 @@
+import os
+import requests
+import json
+import xml.etree.ElementTree as ET
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from dotenv import load_dotenv
+import base64
+import logging
+from datetime import datetime
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging from environment variable
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+logging_level = getattr(logging, log_level, logging.INFO)
+logging.basicConfig(level=logging_level)
+logger = logging.getLogger(__name__)
+
+@dataclass
+class BoomiCredentials:
+    """Boomi API credentials"""
+    username: str
+    password: str
+    account_id: str
+    base_url: str
+    
+    # Optional separate credentials for DataHub queries
+    datahub_username: Optional[str] = None
+    datahub_password: Optional[str] = None
+
+class BoomiDataHubClient:
+    """
+    Boomi DataHub REST API Client
+    
+    This client provides methods to interact with Boomi DataHub REST APIs
+    to retrieve models from all repositories and execute parameterised queries.
+    """
+    
+    def __init__(self, credentials: Optional[BoomiCredentials] = None):
+        """
+        Initialize the Boomi DataHub client
+        
+        Args:
+            credentials: BoomiCredentials object, if None will load from environment
+        """
+        if credentials:
+            self.credentials = credentials
+        else:
+            self.credentials = self._load_credentials_from_env()
+        
+        self.session = requests.Session()
+        self._setup_authentication()
+    
+    def _load_credentials_from_env(self) -> BoomiCredentials:
+        """Load credentials from environment variables"""
+        username = os.getenv('BOOMI_USERNAME')
+        password = os.getenv('BOOMI_PASSWORD')
+        account_id = os.getenv('BOOMI_ACCOUNT_ID')
+        base_url = os.getenv('BOOMI_BASE_URL', 'https://api.boomi.com')
+        
+        # Load separate DataHub credentials if available
+        datahub_username = os.getenv('BOOMI_DATAHUB_USERNAME')
+        datahub_password = os.getenv('BOOMI_DATAHUB_PASSWORD')
+        
+        if not all([username, password, account_id]):
+            raise ValueError("Missing required Boomi credentials in environment variables: BOOMI_USERNAME, BOOMI_PASSWORD, BOOMI_ACCOUNT_ID")
+        
+        return BoomiCredentials(
+            username=username, 
+            password=password, 
+            account_id=account_id, 
+            base_url=base_url,
+            datahub_username=datahub_username,
+            datahub_password=datahub_password
+        )
+    
+    def set_datahub_credentials(self, username: str, password: str):
+        """
+        Set separate credentials for DataHub record queries
+        
+        Args:
+            username: DataHub username
+            password: DataHub password
+        """
+        self.credentials.datahub_username = username
+        self.credentials.datahub_password = password
+        logger.info("🔑 DataHub credentials updated")
+    
+    def has_datahub_credentials(self) -> bool:
+        """
+        Check if separate DataHub credentials are configured
+        
+        Returns:
+            True if DataHub credentials are set, False otherwise
+        """
+        return bool(self.credentials.datahub_username and self.credentials.datahub_password)
+    
+    def _setup_authentication(self):
+        """Setup authentication for API requests"""
+        # Boomi uses Basic Auth with username:password base64 encoded
+        auth_string = f"{self.credentials.username}:{self.credentials.password}"
+        auth_bytes = auth_string.encode('ascii')
+        auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+        
+        self.session.headers.update({
+            'Authorization': f'Basic {auth_b64}',
+            'Accept': 'application/json,application/xml',
+            'Content-Type': 'application/json'
+        })
+    
+    def _make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
+        """
+        Make an authenticated request to Boomi API
+        
+        Args:
+            method: HTTP method (GET, POST, PUT, DELETE)
+            endpoint: API endpoint path
+            **kwargs: Additional arguments for requests
+            
+        Returns:
+            Response object
+        """
+        url = f"{self.credentials.base_url.rstrip('/')}/mdm/api/rest/v1/{self.credentials.account_id}/{endpoint.lstrip('/')}"
+        
+        logger.debug(f"Making {method} request to: {url}")
+        logger.debug(f"Request params: {kwargs.get('params', {})}")
+        
+        try:
+            response = self.session.request(method, url, **kwargs)
+            logger.debug(f"Response status: {response.status_code}")
+            logger.debug(f"Response headers: {dict(response.headers)}")
+            
+            if response.status_code >= 400:
+                logger.error(f"API request failed with status {response.status_code}")
+                logger.error(f"Response content: {response.text}")
+                
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            raise
+    
+    def _parse_xml_response(self, response_text: str) -> List[Dict[str, Any]]:
+        """
+        Parse XML response from Boomi API
+        
+        Args:
+            response_text: XML response text
+            
+        Returns:
+            List of model dictionaries
+        """
+        try:
+            root = ET.fromstring(response_text)
+            models = []
+            
+            # Namespace for Boomi MDM XML
+            ns = {'mdm': 'http://mdm.api.platform.boomi.com/'}
+            
+            # Handle different response types
+            if root.tag.endswith('GetModelResponse'):
+                # Single model response (from GET /models/{id})
+                model = self._parse_single_model_xml(root, ns)
+                if model:
+                    models.append(model)
+            else:
+                # Multiple models response (from GET /models)
+                for model_elem in root.findall('mdm:Model', ns):
+                    model = self._parse_basic_model_xml(model_elem, ns)
+                    if model:
+                        models.append(model)
+            
+            return models
+            
+        except ET.ParseError as e:
+            logger.error(f"Failed to parse XML response: {e}")
+            return []
+    
+    def _parse_basic_model_xml(self, model_elem, ns) -> Dict[str, Any]:
+        """Parse basic model info from Models list response"""
+        model = {}
+        
+        # Extract basic model fields
+        name_elem = model_elem.find('mdm:name', ns)
+        if name_elem is not None:
+            model['name'] = name_elem.text
+        
+        id_elem = model_elem.find('mdm:id', ns)
+        if id_elem is not None:
+            model['id'] = id_elem.text
+        
+        status_elem = model_elem.find('mdm:publicationStatus', ns)
+        if status_elem is not None:
+            # Convert boolean string to readable status
+            is_published = status_elem.text.lower() == 'true'
+            model['publicationStatus'] = 'publish' if is_published else 'draft'
+            model['published'] = is_published
+        
+        version_elem = model_elem.find('mdm:latestVersion', ns)
+        if version_elem is not None:
+            model['latestVersion'] = version_elem.text
+        
+        return model
+    
+    def _parse_single_model_xml(self, root, ns) -> Dict[str, Any]:
+        """Parse detailed model info from GetModelResponse"""
+        model = {}
+        
+        # Extract basic model fields
+        name_elem = root.find('mdm:name', ns)
+        if name_elem is not None:
+            model['name'] = name_elem.text
+        
+        id_elem = root.find('mdm:id', ns)
+        if id_elem is not None:
+            model['id'] = id_elem.text
+        
+        version_elem = root.find('mdm:version', ns)
+        if version_elem is not None:
+            model['version'] = version_elem.text
+            model['latestVersion'] = version_elem.text
+        
+        # Determine publication status (detailed model might not have this field)
+        # For detailed models, assume published if version exists
+        if 'version' in model:
+            model['publicationStatus'] = 'publish'
+            model['published'] = True
+        
+        # Extract fields
+        fields = []
+        fields_elem = root.find('mdm:fields', ns)
+        if fields_elem is not None:
+            for field_elem in fields_elem.findall('mdm:field', ns):
+                field = {}
+                
+                # Get field attributes
+                field['name'] = field_elem.get('name', '')
+                field['type'] = field_elem.get('type', '')
+                field['uniqueId'] = field_elem.get('uniqueId', '')
+                field['required'] = field_elem.get('required', 'false').lower() == 'true'
+                field['repeatable'] = field_elem.get('repeatable', 'false').lower() == 'true'
+                
+                fields.append(field)
+        
+        if fields:
+            model['fields'] = fields
+            model['fieldCount'] = len(fields)
+        
+        # Extract sources
+        sources = []
+        sources_elem = root.find('mdm:sources', ns)
+        if sources_elem is not None:
+            for source_elem in sources_elem.findall('mdm:source', ns):
+                source = {}
+                source['id'] = source_elem.get('id', '')
+                source['type'] = source_elem.get('type', '')
+                source['allowMultipleLinks'] = source_elem.get('allowMultipleLinks', 'false').lower() == 'true'
+                source['default'] = source_elem.get('default', 'false').lower() == 'true'
+                sources.append(source)
+        
+        if sources:
+            model['sources'] = sources
+            model['sourceCount'] = len(sources)
+        
+        # Extract match rules
+        match_rules_elem = root.find('mdm:matchRules', ns)
+        if match_rules_elem is not None:
+            match_rules = []
+            for rule_elem in match_rules_elem.findall('mdm:matchRule', ns):
+                rule = {}
+                rule['topLevelOperator'] = rule_elem.get('topLevelOperator', '')
+                
+                # Extract simple expressions
+                expressions = []
+                for expr_elem in rule_elem.findall('mdm:simpleExpression', ns):
+                    field_id_elem = expr_elem.find('mdm:fieldUniqueId', ns)
+                    if field_id_elem is not None:
+                        expressions.append({'fieldUniqueId': field_id_elem.text})
+                
+                if expressions:
+                    rule['expressions'] = expressions
+                
+                match_rules.append(rule)
+            
+            if match_rules:
+                model['matchRules'] = match_rules
+        
+        # Extract record title
+        title_elem = root.find('mdm:recordTitle', ns)
+        if title_elem is not None:
+            title_params = []
+            params_elem = title_elem.find('mdm:titleParameters', ns)
+            if params_elem is not None:
+                for param_elem in params_elem.findall('mdm:parameter', ns):
+                    unique_id = param_elem.get('uniqueId', '')
+                    if unique_id:
+                        title_params.append(unique_id)
+            
+            if title_params:
+                model['recordTitleFields'] = title_params
+        
+        return model
+    
+    def _get_response(self, method: str, endpoint: str, **kwargs) -> List[Dict[str, Any]]:
+        """Make request and return parsed response"""
+        response = self._make_request(method, endpoint, **kwargs)
+        
+        # Check if response is XML or JSON
+        content_type = response.headers.get('content-type', '').lower()
+        
+        if 'xml' in content_type:
+            return self._parse_xml_response(response.text)
+        else:
+            try:
+                json_response = response.json()
+                # Handle different JSON response formats
+                if isinstance(json_response, list):
+                    return json_response
+                else:
+                    return json_response.get('models', json_response.get('model', []))
+            except ValueError:
+                logger.warning("Response is neither valid XML nor JSON, attempting XML parse")
+                return self._parse_xml_response(response.text)
+    
+    def test_connection(self) -> Dict[str, Any]:
+        """
+        Test the connection to Boomi DataHub API
+        
+        Returns:
+            Dictionary with connection test results
+        """
+        test_result = {
+            'success': False,
+            'error': None,
+            'status_code': None,
+            'url': None,
+            'response_content': None,
+            'account_id': self.credentials.account_id
+        }
+        
+        try:
+            url = f"{self.credentials.base_url.rstrip('/')}/mdm/api/rest/v1/{self.credentials.account_id}/models"
+            test_result['url'] = url
+            
+            logger.info(f"Testing connection with account ID '{self.credentials.account_id}': {url}")
+            response = self.session.get(url)
+            
+            test_result['status_code'] = response.status_code
+            test_result['response_content'] = response.text[:500] if response.text else None
+            
+            if response.status_code == 200:
+                test_result['success'] = True
+                logger.info("Connection test successful")
+            else:
+                test_result['error'] = f"HTTP {response.status_code}: {response.reason}"
+                logger.warning(f"Connection test failed: {test_result['error']}")
+                
+        except Exception as e:
+            test_result['error'] = str(e)
+            logger.error(f"Connection test exception: {e}")
+        
+        return test_result
+    
+    # API Methods
+    
+    def get_models(self, status: Optional[str] = None, name: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Retrieve models from DataHub (all repositories)
+        
+        Args:
+            status: Filter by publication status ('published', 'draft', 'all', or None for all)
+            name: Filter by model name (optional)
+            
+        Returns:
+            List of model objects from all repositories
+        """
+        endpoint = "models"
+        params = {}
+        
+        if status:
+            # Map user-friendly status values to API values
+            status_mapping = {
+                'published': 'publish',
+                'draft': 'draft', 
+                'all': 'all'
+            }
+            
+            api_status = status_mapping.get(status.lower(), status)
+            params['publicationStatus'] = api_status
+        
+        if name:
+            params['name'] = name
+        
+        try:
+            return self._get_response('GET', endpoint, params=params)
+        except Exception as e:
+            logger.error(f"Failed to retrieve models: {e}")
+            return []
+    
+    def get_published_models(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all published models from all repositories
+        
+        Returns:
+            List of published model objects
+        """
+        # Filter published models from all models (since API doesn't support status filtering)
+        all_models = self.get_models()
+        return [model for model in all_models if model.get('published', False)]
+    
+    def get_draft_models(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all draft models from all repositories
+        
+        Returns:
+            List of draft model objects
+        """
+        # Filter draft models from all models (since API doesn't support status filtering)
+        all_models = self.get_models()
+        return [model for model in all_models if not model.get('published', True)]
+    
+    def get_all_models(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Retrieve both published and draft models from all repositories
+        
+        Returns:
+            Dictionary with 'published' and 'draft' keys containing respective models
+        """
+        return {
+            'published': self.get_published_models(),
+            'draft': self.get_draft_models()
+        }
+    
+    def get_model_by_id(self, model_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a specific model by ID
+        
+        Args:
+            model_id: The model identifier
+            
+        Returns:
+            Model object or None if not found
+        """
+        endpoint = f"models/{model_id}"
+        
+        try:
+            models = self._get_response('GET', endpoint)
+            return models[0] if models else None
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Model {model_id} not found")
+                return None
+            raise
+    
+    def get_model_schema(self, model_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve the schema/fields for a specific model
+        
+        Args:
+            model_id: The model identifier
+            
+        Returns:
+            Model schema/fields or None if not found
+        """
+        # Try common schema endpoint patterns
+        schema_endpoints = [
+            f"models/{model_id}/schema",
+            f"models/{model_id}/fields", 
+            f"models/{model_id}/definition"
+        ]
+        
+        for endpoint in schema_endpoints:
+            try:
+                logger.debug(f"Trying schema endpoint: {endpoint}")
+                schema = self._get_response('GET', endpoint)
+                if schema:
+                    return schema[0] if isinstance(schema, list) else schema
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    logger.debug(f"Schema endpoint {endpoint} not found")
+                    continue
+                else:
+                    logger.warning(f"Error accessing {endpoint}: {e}")
+                    continue
+            except Exception as e:
+                logger.debug(f"Exception trying {endpoint}: {e}")
+                continue
+        
+        logger.warning(f"No schema endpoint found for model {model_id}")
+        return None
+    
+    def get_models_by_repository(self, repository_name: str) -> List[Dict[str, Any]]:
+        """
+        Filter models by repository name
+        
+        Args:
+            repository_name: Name of the repository to filter by
+            
+        Returns:
+            List of models that belong to the specified repository
+        """
+        all_models = self.get_models()
+        # Since API returns all models, we'll need to filter by repository if that info is available
+        # For now, return all models with a warning
+        logger.info(f"Returning all models (repository filtering may require additional API calls)")
+        return all_models
+    
+    # NEW: Parameterised Query Methods
+    
+    def query_records_by_parameters(self, universe_id: str, repository_id: str, 
+                               fields: List[str] = None, filters: List[Dict[str, Any]] = None,
+                               limit: int = 100, offset_token: str = "") -> Dict[str, Any]:
+        """
+        Execute a parameterised query against Boomi DataHub records
+        
+        Args:
+            universe_id: The universe/model identifier
+            repository_id: The repository identifier within the universe
+            fields: List of field names to retrieve (if None, gets all model fields)
+            filters: List of filter dictionaries with fieldId, operator, and value
+            limit: Maximum number of records to return (default: 100, max: 1000)
+            offset_token: Pagination token for continuing previous queries
+            
+        Returns:
+            Dictionary containing query results and metadata
+            
+        Example filters:
+            [
+                {"fieldId": "ADVERTISER", "operator": "EQUALS", "value": "Sony"},
+                {"fieldId": "CATEGORY", "operator": "CONTAINS", "value": "Electronics"}
+            ]
+        """
+        try:
+            # Validate inputs
+            if not universe_id or not repository_id:
+                raise ValueError("universe_id and repository_id are required")
+                
+            limit = min(max(1, limit), 1000)  # Clamp between 1 and 1000
+            
+            # Get model details to validate fields if not provided
+            if fields is None:
+                model_details = self.get_model_by_id(universe_id)
+                if model_details and 'fields' in model_details:
+                    fields = [field.get('name', '') for field in model_details['fields'] if field.get('name')]
+                else:
+                    raise ValueError(f"Could not retrieve field information for universe {universe_id}")
+            
+            # Build XML request body
+            query_request = self._build_query_xml(fields, filters, limit, offset_token)
+            
+            # Construct the API URL - use DataHub URL structure
+            # Convert api.boomi.com to the hub URL if needed
+            hub_base_url = self.credentials.base_url.replace('api.boomi.com', 'c01-aus-local.hub.boomi.com')
+            base_url = f"{hub_base_url.rstrip('/')}/mdm/universes/{universe_id}/records/query"
+            params = {"repositoryId": repository_id}
+            
+            # Use DataHub credentials if available, otherwise use regular credentials
+            if self.credentials.datahub_username and self.credentials.datahub_password:
+                auth_username = self.credentials.datahub_username
+                auth_password = self.credentials.datahub_password
+                logger.info("🔑 Using separate DataHub credentials for record query")
+            else:
+                auth_username = self.credentials.username
+                auth_password = self.credentials.password
+                logger.info("🔑 Using regular API credentials for record query")
+            
+            # Create auth header with appropriate credentials
+            auth_string = f"{auth_username}:{auth_password}"
+            auth_bytes = auth_string.encode('ascii')
+            auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
+            
+            # Prepare headers with multiple authentication attempts
+            headers = {
+                "Content-Type": "application/xml",
+                "Authorization": f"Basic {auth_b64}",
+                "Accept": "application/xml",
+                "User-Agent": "BoomiDataHubClient/1.0"
+            }
+            
+            logger.info(f"🔍 Executing query to: {base_url}")
+            logger.debug(f"📋 Query XML: {query_request}")
+            logger.debug(f"📋 Headers: {headers}")
+            
+            # Execute the request
+            response = requests.post(
+                base_url,
+                params=params,
+                headers=headers,
+                data=query_request,
+                timeout=30
+            )
+            
+            logger.info(f"📊 Response status: {response.status_code}")
+            logger.debug(f"📋 Response headers: {dict(response.headers)}")
+            logger.debug(f"📋 Response content (first 500 chars): {response.text[:500]}")
+            
+            # Special handling for 401 errors with detailed troubleshooting
+            if response.status_code == 401:
+                logger.error("❌ 401 UNAUTHORIZED - Authentication failed for DataHub queries")
+                
+                return {
+                    "status": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "error": "Authentication failed for DataHub record queries",
+                    "status_code": 401,
+                    "troubleshooting": {
+                        "issue": "DataHub query authentication failed",
+                        "possible_causes": [
+                            "Different permissions required for DataHub vs API access",
+                            "User account lacks DataHub query permissions",
+                            "Universe or repository access restrictions",
+                            "Different authentication method required for DataHub"
+                        ],
+                        "next_steps": [
+                            "Set separate DataHub credentials using BOOMI_DATAHUB_USERNAME and BOOMI_DATAHUB_PASSWORD",
+                            "Or use client.set_datahub_credentials(username, password)",
+                            "Verify your DataHub query credentials with your Boomi administrator",
+                            "Test with the auth_debug.py script after setting DataHub credentials",
+                            "Contact Boomi administrator for DataHub query permissions"
+                        ],
+                        "auth_info": {
+                            "model_api_works": "Yes (you can retrieve model information)",
+                            "datahub_query_fails": "Yes (401 UNAUTHORIZED)",
+                            "url_used": base_url,
+                            "auth_header": f"Basic {auth_b64[:20]}..."
+                        }
+                    },
+                    "query_parameters": {
+                        "universe_id": universe_id,
+                        "repository_id": repository_id,
+                        "fields": fields,
+                        "filters": filters or [],
+                        "limit": limit
+                    }
+                }
+            
+            # Process the response
+            if response.status_code == 200:
+                # Parse XML response and convert to JSON
+                records_data = self._parse_query_response(response.text)
+                
+                result = {
+                    "status": "success",
+                    "timestamp": datetime.now().isoformat(),
+                    "query_parameters": {
+                        "universe_id": universe_id,
+                        "repository_id": repository_id,
+                        "fields": fields,
+                        "filters": filters or [],
+                        "limit": limit,
+                        "offset_token": offset_token
+                    },
+                    "data": records_data,
+                    "metadata": {
+                        "records_returned": len(records_data.get("records", [])),
+                        "has_more": records_data.get("has_more", False),
+                        "next_offset_token": records_data.get("next_offset_token", "")
+                    }
+                }
+                
+                logger.info(f"✅ Query successful: {len(records_data.get('records', []))} records returned")
+                return result
+                
+            else:
+                # Handle API errors
+                error_message = f"API request failed with status {response.status_code}"
+                
+                try:
+                    # Try to parse error response
+                    error_xml = ET.fromstring(response.text)
+                    error_detail = error_xml.find(".//message")
+                    if error_detail is not None:
+                        error_message = error_detail.text
+                except ET.ParseError:
+                    # If XML parsing fails, use status text
+                    error_message = f"{error_message}: {response.text[:200]}"
+                
+                logger.error(f"❌ Query failed: {error_message}")
+                
+                return {
+                    "status": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "error": error_message,
+                    "status_code": response.status_code,
+                    "response_body": response.text[:500],  # First 500 chars for debugging
+                    "query_parameters": {
+                        "universe_id": universe_id,
+                        "repository_id": repository_id,
+                        "fields": fields,
+                        "filters": filters or [],
+                        "limit": limit
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Query exception: {e}")
+            return {
+                "status": "error",
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e),
+                "query_parameters": {
+                    "universe_id": universe_id,
+                    "repository_id": repository_id,
+                    "fields": fields or [],
+                    "filters": filters or [],
+                    "limit": limit
+                }
+            }
+
+    def _build_query_xml(self, fields: List[str], filters: List[Dict[str, Any]] = None, 
+                        limit: int = 100, offset_token: str = "") -> str:
+        """
+        Build the XML request body for Boomi DataHub query
+        
+        Args:
+            fields: List of field names to include in the view
+            filters: List of filter dictionaries
+            limit: Maximum records to return
+            offset_token: Pagination token
+            
+        Returns:
+            XML string for the request body
+        """
+        # Create root element
+        root = ET.Element("RecordQueryRequest")
+        root.set("limit", str(limit))
+        root.set("offsetToken", offset_token)
+        
+        # Add view section with fields
+        view = ET.SubElement(root, "view")
+        for field in fields:
+            field_elem = ET.SubElement(view, "fieldId")
+            field_elem.text = field
+        
+        # Add filter section if filters are provided
+        if filters:
+            filter_root = ET.SubElement(root, "filter")
+            
+            # Use AND for multiple filters (change to OR if needed)
+            if len(filters) > 1:
+                filter_root.set("op", "AND")
+            
+            for filter_def in filters:
+                field_value = ET.SubElement(filter_root, "fieldValue")
+                
+                # Field ID
+                field_id_elem = ET.SubElement(field_value, "fieldId")
+                field_id_elem.text = filter_def.get("fieldId", "")
+                
+                # Operator
+                operator_elem = ET.SubElement(field_value, "operator")
+                operator_elem.text = filter_def.get("operator", "EQUALS")
+                
+                # Value
+                value_elem = ET.SubElement(field_value, "value")
+                value_elem.text = str(filter_def.get("value", ""))
+        
+        # Convert to string
+        return ET.tostring(root, encoding='unicode')
+
+    def _parse_query_response(self, xml_response: str) -> Dict[str, Any]:
+        """
+        Parse XML response from Boomi DataHub query into JSON format
+        
+        Args:
+            xml_response: XML response string from Boomi API
+            
+        Returns:
+            Dictionary containing parsed records and metadata
+        """
+        try:
+            root = ET.fromstring(xml_response)
+            
+            records = []
+            
+            # Find all record elements - try different possible structures
+            record_elements = (root.findall(".//record") or 
+                             root.findall(".//Record") or 
+                             root.findall(".//*[local-name()='record']"))
+            
+            for record_elem in record_elements:
+                record_data = {}
+                
+                # Extract record ID if available
+                record_id = record_elem.get("id") or record_elem.get("ID")
+                if record_id:
+                    record_data["_record_id"] = record_id
+                
+                # Extract field values - try different structures
+                field_elements = (record_elem.findall(".//field") or 
+                                record_elem.findall(".//Field") or 
+                                record_elem.findall(".//*[local-name()='field']"))
+                
+                for field_elem in field_elements:
+                    field_id = field_elem.get("id") or field_elem.get("ID")
+                    field_value = field_elem.text or ""
+                    
+                    if field_id:
+                        record_data[field_id] = field_value
+                
+                # If no field elements found, try direct child elements
+                if not field_elements:
+                    for child in record_elem:
+                        field_name = child.tag
+                        field_value = child.text or ""
+                        record_data[field_name] = field_value
+                
+                if record_data:  # Only add if we found some data
+                    records.append(record_data)
+            
+            # Extract pagination information
+            has_more = False
+            next_offset_token = ""
+            
+            # Look for pagination elements (adjust based on actual Boomi response structure)
+            pagination_elem = root.find(".//pagination") or root.find(".//Pagination")
+            if pagination_elem is not None:
+                has_more_elem = pagination_elem.find("hasMore") or pagination_elem.find("HasMore")
+                if has_more_elem is not None:
+                    has_more = has_more_elem.text.lower() == "true"
+                
+                next_token_elem = pagination_elem.find("nextOffsetToken") or pagination_elem.find("NextOffsetToken")
+                if next_token_elem is not None:
+                    next_offset_token = next_token_elem.text or ""
+            
+            return {
+                "records": records,
+                "total_returned": len(records),
+                "has_more": has_more,
+                "next_offset_token": next_offset_token
+            }
+            
+        except ET.ParseError as e:
+            raise ValueError(f"Failed to parse XML response: {e}")
+
+    def get_supported_filter_operators(self) -> List[str]:
+        """
+        Get list of supported filter operators for Boomi DataHub queries
+        
+        Returns:
+            List of supported operator strings
+        """
+        return [
+            "EQUALS",           # Exact match
+            "NOT_EQUALS",       # Not equal to
+            "CONTAINS",         # Contains substring
+            "NOT_CONTAINS",     # Does not contain substring
+            "STARTS_WITH",      # Starts with prefix
+            "ENDS_WITH",        # Ends with suffix
+            "GREATER_THAN",     # Greater than (for numbers/dates)
+            "LESS_THAN",        # Less than (for numbers/dates)
+            "GREATER_THAN_OR_EQUAL",  # Greater than or equal
+            "LESS_THAN_OR_EQUAL",     # Less than or equal
+            "IS_NULL",          # Field is null/empty
+            "IS_NOT_NULL"       # Field is not null/empty
+        ]
+
+    def example_parameterised_query(self) -> Dict[str, Any]:
+        """
+        Example of how to use the parameterised query functionality
+        
+        Returns:
+            Example query result
+        """
+        # Example: Query advertisements for Sony products
+        return self.query_records_by_parameters(
+            universe_id="02367877-e560-4d82-b640-6a9f7ab96afa",
+            repository_id="43212d46-1832-4ab1-820d-c0334d619f6f",
+            fields=[
+                "AD_ID", 
+                "ADVERTISER", 
+                "PRODUCT", 
+                "CAMPAIGN", 
+                "CATEGORY"
+            ],
+            filters=[
+                {
+                    "fieldId": "ADVERTISER",
+                    "operator": "EQUALS", 
+                    "value": "Sony"
+                },
+                {
+                    "fieldId": "CATEGORY",
+                    "operator": "CONTAINS",
+                    "value": "Electronics"
+                }
+            ],
+            limit=50
+        )
+    
+    # Utility Methods
+    
+    def print_model_summary(self, models: List[Dict[str, Any]], title: str = "Models"):
+        """
+        Print a summary of models
+        
+        Args:
+            models: List of model objects
+            title: Title for the summary
+        """
+        print(f"\n{title} ({len(models)} total):")
+        print("-" * 60)
+        
+        for i, model in enumerate(models, 1):
+            model_id = model.get('id', 'N/A')
+            model_name = model.get('name', 'N/A')
+            model_status = model.get('publicationStatus', 'N/A')
+            model_version = model.get('latestVersion', 'N/A')
+            is_published = model.get('published', False)
+            
+            print(f"{i}. {model_name}")
+            print(f"   ID: {model_id}")
+            print(f"   Status: {model_status} ({'Published' if is_published else 'Draft'})")
+            print(f"   Version: {model_version}")
+            print()
+    
+    def export_models_to_json(self, models: List[Dict[str, Any]], filename: str):
+        """
+        Export models to JSON file
+        
+        Args:
+            models: List of model objects
+            filename: Output filename
+        """
+        try:
+            with open(filename, 'w') as f:
+                json.dump(models, f, indent=2)
+            logger.info(f"Models exported to {filename}")
+        except Exception as e:
+            logger.error(f"Failed to export models: {e}")
+
+
+def main():
+    """
+    Main function demonstrating the client usage
+    """
+    try:
+        # Initialize the client
+        client = BoomiDataHubClient()
+        
+        print("Boomi DataHub REST API Client")
+        print("=" * 50)
+        
+        # Test the connection first
+        print("Testing API connection...")
+        test_result = client.test_connection()
+        
+        if not test_result['success']:
+            print(f"❌ Connection test failed!")
+            print(f"   URL: {test_result['url']}")
+            print(f"   Status Code: {test_result['status_code']}")
+            print(f"   Error: {test_result['error']}")
+            if test_result['response_content']:
+                print(f"   Response: {test_result['response_content']}")
+            print("\nPlease check your credentials:")
+            print("   BOOMI_USERNAME")
+            print("   BOOMI_PASSWORD") 
+            print("   BOOMI_ACCOUNT_ID")
+            print("   BOOMI_BASE_URL (optional, defaults to https://api.boomi.com)")
+            return 1
+        else:
+            print("✅ Connection test successful!")
+        
+        # Retrieve all models from all repositories
+        print("\n" + "=" * 50)
+        print("RETRIEVING ALL MODELS")
+        print("=" * 50)
+        
+        all_models = client.get_all_models()
+        
+        # Print summaries
+        client.print_model_summary(all_models['published'], "Published Models")
+        client.print_model_summary(all_models['draft'], "Draft Models")
+        
+        # Show total counts
+        total_published = len(all_models['published'])
+        total_draft = len(all_models['draft'])
+        total_models = total_published + total_draft
+        
+        print(f"\n📊 SUMMARY:")
+        print(f"   Total Models: {total_models}")
+        print(f"   Published: {total_published}")
+        print(f"   Draft: {total_draft}")
+        
+        # Export to JSON files
+        if all_models['published']:
+            client.export_models_to_json(all_models['published'], 'published_models.json')
+        
+        if all_models['draft']:
+            client.export_models_to_json(all_models['draft'], 'draft_models.json')
+        
+        # Export all models together
+        all_models_list = all_models['published'] + all_models['draft']
+        if all_models_list:
+            client.export_models_to_json(all_models_list, 'all_models.json')
+        
+        print(f"\n✅ Operation completed successfully!")
+        print(f"Found {total_published} published and {total_draft} draft models across all repositories")
+        
+    except Exception as e:
+        logger.error(f"Error in main execution: {e}")
+        return 1
+    
+    return 0
+
+
+if __name__ == "__main__":
+    exit(main())
