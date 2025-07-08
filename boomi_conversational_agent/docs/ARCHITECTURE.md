@@ -1,21 +1,24 @@
 # SYSTEM ARCHITECTURE
 
 **Project**: Boomi DataHub Conversational AI Agent  
-**Last Updated**: 2025-07-02  
-**Version**: 2.0 (Phase 5 Complete, Phase 6 Ready)
+**Last Updated**: 2025-07-08  
+**Version**: 4.0 (Phase 7C Complete, Phase 8 Ready)
 
 ## 🏗️ ARCHITECTURE OVERVIEW
 
-The system implements a **multi-tier, multi-agent architecture** that transforms natural language business queries into intelligent Boomi DataHub data retrieval. **Phase 5 (CLI Agent Foundation) is complete** with 100% success rate on real queries using dynamic field discovery.
+The system implements a **unified, multi-agent architecture** that transforms natural language business queries into intelligent Boomi DataHub data retrieval. **Phase 7C (Unified Server Architecture) is complete** with enterprise-grade security integration and verified rate limiting.
 
 ### Current Implementation Status
 - ✅ **Phase 5 Complete**: CLI-based conversational agent with 6-agent pipeline
+- ✅ **Phase 6 Complete**: Security & Guardrails with OAuth 2.1 implementation
+- ✅ **Phase 7 Complete**: MCP June 2025 specification with Resource Indicators
+- ✅ **Phase 7C Complete**: Unified server architecture with enterprise security
 - ✅ **Dynamic Discovery**: Real-time model and field discovery from Boomi DataHub
-- ✅ **TDD Implementation**: 76/76 tests passing with comprehensive coverage
-- ✅ **Real Data Integration**: Working end-to-end with live Boomi DataHub
-- 🎯 **Phase 6 Ready**: Security & Guardrails implementation planned
+- ✅ **Security Integration**: Rate limiting, threat detection, audit logging
+- ✅ **Production Ready**: Unified server with verified security features
+- 🎯 **Phase 8 Ready**: Web UI Migration implementation planned
 
-### Phase 5 Implementation (✅ COMPLETE)
+### Phase 7C Implementation (✅ COMPLETE)
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    🖥️ CLI Interface                        │
@@ -53,7 +56,7 @@ The system implements a **multi-tier, multi-agent architecture** that transforms
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 6 Target Architecture (🎯 PLANNED)
+### Phase 8 Target Architecture (🎯 PLANNED)
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │          🌐 Web UI Layer (Future)                          │
