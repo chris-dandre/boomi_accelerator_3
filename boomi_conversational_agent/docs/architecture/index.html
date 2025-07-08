@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boomi Conversational Agent - Solution Architecture</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --accent-color: #3b82f6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #1f2937;
+            --light-bg: #f9fafb;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .nav-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+        }
+
+        .nav-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            border-color: var(--accent-color);
+        }
+
+        .nav-card .icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .nav-card h3 {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+        }
+
+        .nav-card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .features {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .features h2 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-item {
+            padding: 1rem;
+            border-left: 4px solid var(--accent-color);
+            background: var(--light-bg);
+            border-radius: 0.5rem;
+        }
+
+        .feature-item h4 {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary-color);
+        }
+
+        .feature-item p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .security-badge {
+            display: inline-block;
+            background: var(--success-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .nav-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Boomi Conversational Agent</h1>
+            <p>Advanced Solution Architecture Documentation with 4-Layer Security Defense and MCP June 2025 Compliance</p>
+        </div>
+
+        <div class="nav-grid">
+            <a href="system-overview.html" class="nav-card">
+                <span class="icon">🏗️</span>
+                <h3>System Overview</h3>
+                <p>Complete system architecture showing all components, layers, and integrations</p>
+            </a>
+
+            <a href="security-architecture.html" class="nav-card">
+                <span class="icon">🛡️</span>
+                <h3>Security Architecture</h3>
+                <p>4-layer defense system with threat detection and final LLM approval</p>
+            </a>
+
+            <a href="mcp-protocol.html" class="nav-card">
+                <span class="icon">🔌</span>
+                <h3>MCP Protocol Flow</h3>
+                <p>Model Context Protocol June 2025 specification with OAuth 2.1 integration</p>
+            </a>
+
+            <a href="authentication.html" class="nav-card">
+                <span class="icon">🔐</span>
+                <h3>Authentication & Authorization</h3>
+                <p>OAuth 2.1 + PKCE flow with role-based access control</p>
+            </a>
+
+            <a href="ai-pipeline.html" class="nav-card">
+                <span class="icon">🤖</span>
+                <h3>AI Pipeline</h3>
+                <p>6-agent conversational system with Claude LLM integration</p>
+            </a>
+
+            <a href="data-flow.html" class="nav-card">
+                <span class="icon">📊</span>
+                <h3>Data Flow</h3>
+                <p>End-to-end data processing from query to business response</p>
+            </a>
+
+            <a href="threat-detection.html" class="nav-card">
+                <span class="icon">🚨</span>
+                <h3>Threat Detection</h3>
+                <p>Multi-signal threat analysis with comprehensive attack taxonomy</p>
+            </a>
+
+            <a href="integration.html" class="nav-card">
+                <span class="icon">🔗</span>
+                <h3>Integration Architecture</h3>
+                <p>External system connections and API integrations</p>
+            </a>
+        </div>
+
+        <div class="features">
+            <h2>🚀 System Highlights</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>🛡️ Advanced Security</h4>
+                    <p>4-layer defense system with final LLM approval checkpoint</p>
+                    <span class="security-badge">ENTERPRISE GRADE</span>
+                </div>
+                
+                <div class="feature-item">
+                    <h4>🔌 MCP Compliant</h4>
+                    <p>June 2025 specification with OAuth 2.1 + PKCE authentication</p>
+                    <span class="security-badge">LATEST SPEC</span>
+                </div>
+                
+                <div class="feature-item">
+                    <h4>🤖 AI-Powered</h4>
+                    <p>6-agent pipeline with Claude LLM for intelligent processing</p>
+                    <span class="security-badge">CLAUDE INTEGRATED</span>
+                </div>
+                
+                <div class="feature-item">
+                    <h4>💬 Conversational</h4>
+                    <p>Natural language to structured data queries with business responses</p>
+                    <span class="security-badge">USER FRIENDLY</span>
+                </div>
+                
+                <div class="feature-item">
+                    <h4>🔍 Threat Detection</h4>
+                    <p>Multi-signal analysis catching sophisticated attacks</p>
+                    <span class="security-badge">ZERO TRUST</span>
+                </div>
+                
+                <div class="feature-item">
+                    <h4>📈 Scalable Design</h4>
+                    <p>Modular architecture with clear separation of concerns</p>
+                    <span class="security-badge">ENTERPRISE READY</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add smooth scrolling and hover effects
+        document.querySelectorAll('.nav-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.borderColor = 'var(--accent-color)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.borderColor = 'transparent';
+            });
+        });
+    </script>
+</body>
+</html>

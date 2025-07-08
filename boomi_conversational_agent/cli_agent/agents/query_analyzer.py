@@ -263,24 +263,33 @@ Focus on semantic understanding - if they ask about "users", suggest the "users"
             print(f"✅ Claude Analysis Complete")
             print(f"   Raw Response: {response[:200]}...")  # Show first 200 chars for debugging
             
-            # Parse Claude's JSON response
+            # Parse Claude's JSON response (handle markdown code blocks)
             import json
+            import re
+            
+            # Try direct JSON parsing first
             try:
                 analysis = json.loads(response.strip())
-            except json.JSONDecodeError as e:
-                print(f"❌ JSON parsing failed: {e}")
-                print(f"   Trying to extract JSON from response...")
-                # Try to find JSON in the response
-                import re
-                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            except json.JSONDecodeError:
+                # Try to extract JSON from markdown code blocks
+                json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
                 if json_match:
                     try:
-                        analysis = json.loads(json_match.group())
-                        print(f"✅ Extracted JSON successfully")
-                    except:
-                        raise ValueError("Could not parse JSON from Claude response")
+                        analysis = json.loads(json_match.group(1).strip())
+                    except json.JSONDecodeError:
+                        # Try generic code blocks
+                        code_match = re.search(r'```\s*(.*?)\s*```', response, re.DOTALL)
+                        if code_match:
+                            analysis = json.loads(code_match.group(1).strip())
+                        else:
+                            raise ValueError("Could not parse JSON from Claude response")
                 else:
-                    raise ValueError("No JSON found in Claude response")
+                    # Try to find any JSON-like structure
+                    json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                    if json_match:
+                        analysis = json.loads(json_match.group())
+                    else:
+                        raise ValueError("No JSON found in Claude response")
             
             print(f"   Intent: {analysis.get('intent', 'UNKNOWN')}")
             print(f"   Entities: {len(analysis.get('entities', []))} found")

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integration Architecture - Boomi Conversational Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --accent-color: #3b82f6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #1f2937;
+            --light-bg: #f9fafb;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .nav-breadcrumb {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .nav-breadcrumb a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+
+        .nav-breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .section h2 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--accent-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .section h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 1.5rem 0 1rem 0;
+            color: var(--secondary-color);
+        }
+
+        .section h4 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin: 1rem 0 0.5rem 0;
+            color: var(--primary-color);
+        }
+
+        .integration-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .integration-card {
+            background: var(--light-bg);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            border-left: 4px solid var(--accent-color);
+            transition: transform 0.3s ease;
+        }
+
+        .integration-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .integration-card h4 {
+            margin-bottom: 0.5rem;
+        }
+
+        .integration-card .tech-badge {
+            display: inline-block;
+            background: var(--accent-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin: 0.25rem 0.25rem 0 0;
+        }
+
+        .architecture-diagram {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            overflow-x: auto;
+        }
+
+        .mermaid {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border: 1px solid var(--border-color);
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+
+        .feature-list li::before {
+            content: "✓";
+            color: var(--success-color);
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .status-active {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .status-beta {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .status-planned {
+            background: var(--text-secondary);
+            color: white;
+        }
+
+        .back-button {
+            display: inline-block;
+            background: var(--accent-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.3s ease;
+            margin-top: 2rem;
+        }
+
+        .back-button:hover {
+            background: var(--primary-color);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .integration-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-breadcrumb">
+            <a href="index.html">🏠 Architecture Home</a> → <span>🔗 Integration Architecture</span>
+        </div>
+
+        <div class="header">
+            <h1>🔗 Integration Architecture</h1>
+            <p>External system connections, API integrations, and data exchange patterns for the Boomi Conversational Agent ecosystem</p>
+        </div>
+
+        <div class="section">
+            <h2>🏗️ Integration Overview</h2>
+            <p>The Boomi Conversational Agent integrates with multiple external systems to provide a comprehensive data access and query platform. The architecture follows enterprise integration patterns with robust security, monitoring, and error handling.</p>
+            
+            <div class="mermaid">
+flowchart TD
+    subgraph "🌐 External Systems"
+        EXT["🔗 External Clients"]
+        BOOMI["🏢 Boomi DataHub"]
+        CLAUDE["🤖 Claude API"]
+        MONITOR["📊 Monitoring Systems"]
+    end
+    
+    subgraph "🛡️ Security & Gateway Layer"
+        GATEWAY["🚪 API Gateway<br/>(FastAPI)"]
+        OAUTH["🔐 OAuth 2.1<br/>AuthZ/AuthN"]
+        SECURITY["🛡️ Security<br/>Filtering"]
+        RATE["⚡ Rate Limiting<br/>& Throttling"]
+    end
+    
+    subgraph "🔌 Protocol & Communication"
+        MCP["📡 MCP Protocol<br/>Layer"]
+        JWT["🎫 JWT Validator"]
+        RBAC["👥 RBAC Engine"]
+    end
+    
+    subgraph "🤖 Internal Services"
+        PIPELINE["🧠 AI Agent<br/>Pipeline"]
+        CONFIG["⚙️ Config<br/>Service"]
+        TELEMETRY["📈 Logging &<br/>Telemetry"]
+        RESPONSE["📤 Response<br/>Generator"]
+    end
+    
+    %% External connections
+    EXT --> GATEWAY
+    BOOMI --> MCP
+    CLAUDE --> PIPELINE
+    MONITOR --> TELEMETRY
+    
+    %% Security flow
+    GATEWAY --> OAUTH
+    OAUTH --> JWT
+    JWT --> RBAC
+    RBAC --> SECURITY
+    SECURITY --> RATE
+    
+    %% Protocol flow
+    MCP --> SECURITY
+    RATE --> PIPELINE
+    
+    %% Internal flow
+    PIPELINE --> CONFIG
+    CONFIG --> TELEMETRY
+    TELEMETRY --> RESPONSE
+    RESPONSE --> GATEWAY
+    
+    %% Styling
+    classDef external fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef security fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef protocol fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef internal fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    
+    class EXT,BOOMI,CLAUDE,MONITOR external
+    class GATEWAY,OAUTH,SECURITY,RATE security
+    class MCP,JWT,RBAC protocol
+    class PIPELINE,CONFIG,TELEMETRY,RESPONSE internal
+            </div>
+
+            <div class="mermaid">
+graph TB
+    subgraph "External Integrations"
+        A[External Client] --> B[API Gateway]
+        C[Boomi DataHub] --> D[MCP Server]
+        E[Claude API] --> F[AI Pipeline]
+    end
+    
+    subgraph "Security Layer"
+        G[OAuth 2.1 Provider] --> H[JWT Validator]
+        I[Rate Limiter] --> J[Security Filter]
+    end
+    
+    subgraph "Core Services"
+        K[Agent Pipeline] --> L[Query Builder]
+        M[Data Processor] --> N[Response Generator]
+    end
+    
+    B --> G
+    D --> I
+    F --> K
+    H --> D
+    J --> K
+    L --> C
+    N --> A
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔌 External System Integrations</h2>
+            
+            <div class="integration-grid">
+                <div class="integration-card">
+                    <h4>🏢 Boomi DataHub Platform</h4>
+                    <p>Primary data source providing unified access to enterprise data models and business objects.</p>
+                    <div class="tech-badge">REST API</div>
+                    <div class="tech-badge">GraphQL</div>
+                    <div class="tech-badge">OAuth 2.1</div>
+                    <span class="status-badge status-active">ACTIVE</span>
+                    
+                    <h4>Integration Features:</h4>
+                    <ul class="feature-list">
+                        <li>Real-time data model discovery</li>
+                        <li>Dynamic field mapping</li>
+                        <li>Intelligent query optimization</li>
+                        <li>Batch and streaming data access</li>
+                        <li>Metadata synchronization</li>
+                    </ul>
+                </div>
+
+                <div class="integration-card">
+                    <h4>🤖 Claude API (Anthropic)</h4>
+                    <p>AI-powered natural language processing for query understanding and response generation.</p>
+                    <div class="tech-badge">REST API</div>
+                    <div class="tech-badge">JSON-RPC</div>
+                    <div class="tech-badge">WebSocket</div>
+                    <span class="status-badge status-active">ACTIVE</span>
+                    
+                    <h4>Integration Features:</h4>
+                    <ul class="feature-list">
+                        <li>Natural language query parsing</li>
+                        <li>Multi-turn conversation handling</li>
+                        <li>Context-aware responses</li>
+                        <li>Business logic reasoning</li>
+                        <li>Error explanation and suggestions</li>
+                    </ul>
+                </div>
+
+                <div class="integration-card">
+                    <h4>📊 Monitoring & Observability</h4>
+                    <p>Comprehensive monitoring stack for system health, performance, and security analytics.</p>
+                    <div class="tech-badge">Prometheus</div>
+                    <div class="tech-badge">OpenTelemetry</div>
+                    <div class="tech-badge">Grafana</div>
+                    <span class="status-badge status-active">ACTIVE</span>
+                    
+                    <h4>Integration Features:</h4>
+                    <ul class="feature-list">
+                        <li>Real-time performance metrics</li>
+                        <li>Security event correlation</li>
+                        <li>Distributed tracing</li>
+                        <li>Anomaly detection</li>
+                        <li>Automated alerting</li>
+                    </ul>
+                </div>
+
+                <div class="integration-card">
+                    <h4>🔐 Identity & Access Management</h4>
+                    <p>Enterprise-grade authentication and authorization with OAuth 2.1 and RBAC support.</p>
+                    <div class="tech-badge">OAuth 2.1</div>
+                    <div class="tech-badge">PKCE</div>
+                    <div class="tech-badge">JWT</div>
+                    <span class="status-badge status-active">ACTIVE</span>
+                    
+                    <h4>Integration Features:</h4>
+                    <ul class="feature-list">
+                        <li>Single sign-on (SSO)</li>
+                        <li>Role-based access control</li>
+                        <li>Multi-factor authentication</li>
+                        <li>Session management</li>
+                        <li>Audit logging</li>
+                    </ul>
+                </div>
+
+                <div class="integration-card">
+                    <h4>📈 Business Intelligence</h4>
+                    <p>Advanced analytics and reporting capabilities for business insights and decision support.</p>
+                    <div class="tech-badge">REST API</div>
+                    <div class="tech-badge">SQL</div>
+                    <div class="tech-badge">GraphQL</div>
+                    <span class="status-badge status-beta">BETA</span>
+                    
+                    <h4>Integration Features:</h4>
+                    <ul class="feature-list">
+                        <li>Interactive dashboards</li>
+                        <li>Custom report generation</li>
+                        <li>Data visualization</li>
+                        <li>Trend analysis</li>
+                        <li>Export capabilities</li>
+                    </ul>
+                </div>
+
+                <div class="integration-card">
+                    <h4>🔔 Notification Services</h4>
+                    <p>Multi-channel notification system for alerts, updates, and system communications.</p>
+                    <div class="tech-badge">SMTP</div>
+                    <div class="tech-badge">Webhooks</div>
+                    <div class="tech-badge">Push API</div>
+                    <span class="status-badge status-planned">PLANNED</span>
+                    
+                    <h4>Integration Features:</h4>
+                    <ul class="feature-list">
+                        <li>Email notifications</li>
+                        <li>Slack/Teams integration</li>
+                        <li>Mobile push notifications</li>
+                        <li>SMS alerts</li>
+                        <li>Custom webhook endpoints</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🛡️ Security Integration Patterns</h2>
+            <p>All external integrations follow enterprise security standards with multiple layers of protection.</p>
+            
+            <h3>🔐 Authentication & Authorization</h3>
+            <div class="mermaid">
+flowchart LR
+    subgraph "🔐 Authentication Phase"
+        CLIENT["👤 Client Request<br/>+ Credentials<br/>+ PKCE"]
+        OAUTH["🔑 OAuth 2.1<br/>Authorization<br/>Server"]
+        JWT["🎫 JWT Token<br/>Validation<br/>+ Claims"]
+        RBAC["👥 RBAC Engine<br/>Role-Based<br/>Access Control"]
+    end
+    
+    subgraph "🛡️ Security Processing"
+        RATE["⚡ Rate Limiting<br/>+ Request<br/>Throttling"]
+        FILTER["🔍 Security<br/>Filtering<br/>+ Validation"]
+        AUDIT["📝 Audit Logging<br/>+ Security<br/>Monitoring"]
+        GATEWAY["🚪 API Response<br/>Gateway"]
+    end
+    
+    %% Authentication flow
+    CLIENT --> OAUTH
+    OAUTH --> JWT
+    JWT --> RBAC
+    
+    %% Security processing flow
+    RBAC --> RATE
+    RATE --> FILTER
+    FILTER --> AUDIT
+    AUDIT --> GATEWAY
+    
+    %% Response flow
+    GATEWAY --> CLIENT
+    
+    %% Styling
+    classDef auth fill:#e3f2fd,stroke:#1976d2,stroke-width:3px
+    classDef security fill:#fce4ec,stroke:#c2185b,stroke-width:3px
+    classDef success fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
+    classDef process fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    
+    class CLIENT,OAUTH auth
+    class JWT,RBAC process
+    class RATE,FILTER,AUDIT security
+    class GATEWAY success
+            </div>
+
+            <h3>🔒 Data Protection</h3>
+            <ul class="feature-list">
+                <li>End-to-end encryption (TLS 1.3)</li>
+                <li>Data masking and tokenization</li>
+                <li>PII detection and redaction</li>
+                <li>Secure credential management</li>
+                <li>Zero-trust network architecture</li>
+            </ul>
+
+            <h3>🚨 Threat Detection</h3>
+            <ul class="feature-list">
+                <li>Real-time anomaly detection</li>
+                <li>Behavioral analysis</li>
+                <li>Injection attack prevention</li>
+                <li>DDoS protection</li>
+                <li>Automated incident response</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>📊 API Integration Patterns</h2>
+            
+            <h3>🔄 Synchronous Integrations</h3>
+            <div class="integration-grid">
+                <div class="integration-card">
+                    <h4>REST API Calls</h4>
+                    <p>Direct HTTP requests for real-time data retrieval and updates.</p>
+                    <div class="tech-badge">HTTP/2</div>
+                    <div class="tech-badge">JSON</div>
+                    <div class="tech-badge">OpenAPI</div>
+                </div>
+                
+                <div class="integration-card">
+                    <h4>GraphQL Queries</h4>
+                    <p>Efficient data fetching with precise field selection and single endpoint.</p>
+                    <div class="tech-badge">GraphQL</div>
+                    <div class="tech-badge">Schema</div>
+                    <div class="tech-badge">Fragments</div>
+                </div>
+            </div>
+
+            <h3>🔄 Asynchronous Integrations</h3>
+            <div class="integration-grid">
+                <div class="integration-card">
+                    <h4>Message Queues</h4>
+                    <p>Reliable message delivery for batch processing and event-driven workflows.</p>
+                    <div class="tech-badge">RabbitMQ</div>
+                    <div class="tech-badge">Redis</div>
+                    <div class="tech-badge">Pub/Sub</div>
+                </div>
+                
+                <div class="integration-card">
+                    <h4>WebSocket Streaming</h4>
+                    <p>Real-time bidirectional communication for live data feeds.</p>
+                    <div class="tech-badge">WebSocket</div>
+                    <div class="tech-badge">Server-Sent Events</div>
+                    <div class="tech-badge">Streaming</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🔧 Configuration & Management</h2>
+            
+            <h3>⚙️ Configuration Management</h3>
+            <ul class="feature-list">
+                <li>Environment-based configuration</li>
+                <li>Dynamic configuration updates</li>
+                <li>Secret management integration</li>
+                <li>Configuration validation</li>
+                <li>Rollback capabilities</li>
+            </ul>
+
+            <h3>📈 Performance Optimization</h3>
+            <ul class="feature-list">
+                <li>Connection pooling</li>
+                <li>Request/response caching</li>
+                <li>Load balancing</li>
+                <li>Circuit breaker patterns</li>
+                <li>Retry policies with exponential backoff</li>
+            </ul>
+
+            <h3>🔍 Monitoring & Observability</h3>
+            <ul class="feature-list">
+                <li>Distributed tracing</li>
+                <li>Performance metrics</li>
+                <li>Error tracking</li>
+                <li>Health checks</li>
+                <li>SLA monitoring</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>🚀 Integration Roadmap</h2>
+            
+            <h3>🎯 Phase 1: Core Integrations (Complete)</h3>
+            <ul class="feature-list">
+                <li>Boomi DataHub API integration</li>
+                <li>Claude API integration</li>
+                <li>OAuth 2.1 authentication</li>
+                <li>Basic monitoring setup</li>
+            </ul>
+
+            <h3>🎯 Phase 2: Enhanced Features (In Progress)</h3>
+            <ul class="feature-list">
+                <li>Advanced analytics integration</li>
+                <li>Enhanced security monitoring</li>
+                <li>Performance optimization</li>
+                <li>Extended API capabilities</li>
+            </ul>
+
+            <h3>🎯 Phase 3: Advanced Integrations (Planned)</h3>
+            <ul class="feature-list">
+                <li>Multi-tenant support</li>
+                <li>External notification services</li>
+                <li>Third-party BI tools</li>
+                <li>Enterprise directory services</li>
+            </ul>
+        </div>
+
+        <a href="index.html" class="back-button">← Back to Architecture Overview</a>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            fontFamily: 'Segoe UI, sans-serif'
+        });
+
+        // Add hover effects to integration cards
+        document.querySelectorAll('.integration-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-2px)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+            });
+        });
+    </script>
+</body>
+</html>

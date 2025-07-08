@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Pipeline - Boomi Conversational Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root { --primary-color: #f59e0b; --accent-color: #fbbf24; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .header { text-align: center; background: rgba(255,255,255,0.95); padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; }
+        .header h1 { font-size: 2.5rem; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-back { display: inline-block; background: var(--accent-color); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; margin-bottom: 1rem; }
+        .diagram-container { background: rgba(255,255,255,0.95); border-radius: 1rem; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .diagram-title { font-size: 1.5rem; color: var(--primary-color); text-align: center; margin-bottom: 1rem; }
+        .mermaid { text-align: center; background: white; border-radius: 0.5rem; padding: 1rem; }
+        .pipeline-ascii { background: #1f2937; color: #fbbf24; font-family: monospace; padding: 2rem; border-radius: 0.5rem; font-size: 0.75rem; white-space: pre; overflow-x: auto; }
+        .agents-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .agent-card { background: #f9fafb; border-radius: 0.5rem; padding: 1.5rem; border-left: 4px solid var(--accent-color); }
+        .agent-card h3 { color: var(--primary-color); margin-bottom: 0.5rem; font-weight: 600; }
+        .features-list { list-style: none; margin-top: 1rem; }
+        .features-list li { padding: 0.25rem 0; color: #6b7280; font-size: 0.85rem; }
+        .features-list li:before { content: "✓ "; color: #10b981; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="nav-back">← Back to Architecture Home</a>
+        
+        <div class="header">
+            <h1>🤖 AI Pipeline</h1>
+            <p>6-Agent Conversational System with Claude LLM Integration</p>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">6-Agent Processing Pipeline</div>
+            <div class="pipeline-ascii">
+┌─────────────────────────────────────────────────────────────┐
+│               🤖 6-AGENT CONVERSATIONAL PIPELINE            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
+│ │   AGENT 1   │────│   AGENT 2   │────│   AGENT 3   │      │
+│ │   Query     │    │   Model     │    │   Field     │      │
+│ │  Analyzer   │    │ Discovery   │    │   Mapper    │      │
+│ │             │    │             │    │             │      │
+│ │• NLP Parse  │    │• Relevance  │    │• Entity→    │      │
+│ │• Intent     │    │• Ranking    │    │  Field      │      │
+│ │• Entities   │    │• Selection  │    │• Semantic   │      │
+│ └─────────────┘    └─────────────┘    └─────────────┘      │
+│        │                   │                   │           │
+│        ▼                   ▼                   ▼           │
+│ ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
+│ │   AGENT 4   │    │   AGENT 5   │    │   AGENT 6   │      │
+│ │   Query     │    │    Data     │    │  Response   │      │
+│ │  Builder    │    │ Retrieval   │    │ Generator   │      │
+│ │             │    │             │    │             │      │
+│ │• Filter     │    │• MCP Call   │    │• Natural    │      │
+│ │• Structure  │    │• Execute    │    │  Language   │      │
+│ │• Optimize   │    │• Results    │    │• Summary    │      │
+│ └─────────────┘    └─────────────┘    └─────────────┘      │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │              🧠 Claude LLM Integration                  │ │
+│ │                                                         │ │
+│ │ • Query semantic understanding                          │ │
+│ │ • Field mapping intelligence                            │ │
+│ │ • Response generation                                   │ │
+│ │ • Security threat analysis                              │ │
+│ └─────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Agent Processing Flow</div>
+            <div class="mermaid">
+                graph LR
+                    INPUT[Natural Language Query] --> A1[Agent 1: Query Analyzer]
+                    A1 --> A2[Agent 2: Model Discovery]
+                    A2 --> A3[Agent 3: Field Mapper]
+                    A3 --> A4[Agent 4: Query Builder]
+                    A4 --> A5[Agent 5: Data Retrieval]
+                    A5 --> A6[Agent 6: Response Generator]
+                    A6 --> OUTPUT[Business Response]
+                    
+                    A1 -.-> CLAUDE[Claude LLM]
+                    A3 -.-> CLAUDE
+                    A6 -.-> CLAUDE
+                    
+                    classDef agentClass fill:#fef3c7
+                    classDef claudeClass fill:#ddd6fe
+                    classDef ioClass fill:#d1fae5
+                    
+                    class A1,A2,A3,A4,A5,A6 agentClass
+                    class CLAUDE claudeClass
+                    class INPUT,OUTPUT ioClass
+            </div>
+        </div>
+
+        <div class="agents-grid">
+            <div class="agent-card">
+                <h3>🔍 Agent 1: Query Analyzer</h3>
+                <p>Analyzes natural language input and extracts intent and entities</p>
+                <ul class="features-list">
+                    <li>Natural language processing</li>
+                    <li>Intent classification (LIST, FILTERED, COUNT, META)</li>
+                    <li>Entity extraction and tagging</li>
+                    <li>Query type determination</li>
+                    <li>Claude LLM integration for semantic understanding</li>
+                    <li>Context-aware parsing</li>
+                </ul>
+            </div>
+
+            <div class="agent-card">
+                <h3>🎯 Agent 2: Model Discovery</h3>
+                <p>Identifies relevant data models based on query analysis</p>
+                <ul class="features-list">
+                    <li>Model relevance scoring</li>
+                    <li>Multi-model query support</li>
+                    <li>Dynamic model ranking</li>
+                    <li>Fallback model selection</li>
+                    <li>Model metadata analysis</li>
+                    <li>Business context consideration</li>
+                </ul>
+            </div>
+
+            <div class="agent-card">
+                <h3>🗺️ Agent 3: Field Mapper</h3>
+                <p>Maps extracted entities to specific model fields intelligently</p>
+                <ul class="features-list">
+                    <li>Entity-to-field mapping</li>
+                    <li>Semantic field matching</li>
+                    <li>Claude LLM enhanced mapping</li>
+                    <li>Confidence scoring</li>
+                    <li>Field type validation</li>
+                    <li>Fuzzy matching capabilities</li>
+                </ul>
+            </div>
+
+            <div class="agent-card">
+                <h3>🔧 Agent 4: Query Builder</h3>
+                <p>Constructs optimized data queries from mapped entities</p>
+                <ul class="features-list">
+                    <li>Filter construction</li>
+                    <li>Query optimization</li>
+                    <li>LLM-powered query reasoning</li>
+                    <li>Parameter validation</li>
+                    <li>Performance optimization</li>
+                    <li>Complex query support</li>
+                </ul>
+            </div>
+
+            <div class="agent-card">
+                <h3>📊 Agent 5: Data Retrieval</h3>
+                <p>Executes queries through MCP protocol and retrieves data</p>
+                <ul class="features-list">
+                    <li>MCP JSON-RPC execution</li>
+                    <li>Error handling and retries</li>
+                    <li>Response parsing</li>
+                    <li>Data format conversion</li>
+                    <li>Result validation</li>
+                    <li>Performance monitoring</li>
+                </ul>
+            </div>
+
+            <div class="agent-card">
+                <h3>💬 Agent 6: Response Generator</h3>
+                <p>Generates natural language responses from retrieved data</p>
+                <ul class="features-list">
+                    <li>Natural language generation</li>
+                    <li>Business-friendly formatting</li>
+                    <li>Claude LLM response crafting</li>
+                    <li>Context-aware messaging</li>
+                    <li>Error message handling</li>
+                    <li>Summary generation</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Claude LLM Integration Points</div>
+            <div class="mermaid">
+                graph TB
+                    subgraph "Claude LLM Capabilities"
+                        C1[Semantic Understanding]
+                        C2[Field Mapping Intelligence]
+                        C3[Query Reasoning]
+                        C4[Response Generation]
+                        C5[Security Analysis]
+                    end
+                    
+                    subgraph "Agent Integration"
+                        A1[Query Analyzer] --> C1
+                        A3[Field Mapper] --> C2
+                        A4[Query Builder] --> C3
+                        A6[Response Generator] --> C4
+                        SEC[Security Layer] --> C5
+                    end
+                    
+                    C1 --> INTENT[Intent Classification]
+                    C2 --> MAPPING[Intelligent Mapping]
+                    C3 --> FILTERS[Smart Filters]
+                    C4 --> RESPONSE[Natural Response]
+                    C5 --> THREATS[Threat Detection]
+                    
+                    classDef claudeClass fill:#ddd6fe
+                    classDef agentClass fill:#fef3c7
+                    classDef outputClass fill:#d1fae5
+                    
+                    class C1,C2,C3,C4,C5 claudeClass
+                    class A1,A3,A4,A6,SEC agentClass
+                    class INTENT,MAPPING,FILTERS,RESPONSE,THREATS outputClass
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true, theme: 'default', securityLevel: 'loose',
+            flowchart: { htmlLabels: true, curve: 'basis' }
+        });
+    </script>
+</body>
+</html>

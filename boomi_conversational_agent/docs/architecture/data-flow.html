@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Flow - Boomi Conversational Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root { --primary-color: #06b6d4; --accent-color: #0891b2; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .header { text-align: center; background: rgba(255,255,255,0.95); padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; }
+        .header h1 { font-size: 2.5rem; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-back { display: inline-block; background: var(--accent-color); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; margin-bottom: 1rem; }
+        .diagram-container { background: rgba(255,255,255,0.95); border-radius: 1rem; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .diagram-title { font-size: 1.5rem; color: var(--primary-color); text-align: center; margin-bottom: 1rem; }
+        .mermaid { text-align: center; background: white; border-radius: 0.5rem; padding: 1rem; }
+        .flow-ascii { background: #1f2937; color: #06b6d4; font-family: monospace; padding: 2rem; border-radius: 0.5rem; font-size: 0.75rem; white-space: pre; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="nav-back">← Back to Architecture Home</a>
+        
+        <div class="header">
+            <h1>📊 Data Flow</h1>
+            <p>End-to-End Data Processing from Query to Business Response</p>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Complete Data Flow Architecture</div>
+            <div class="mermaid">
+                flowchart TB
+                    START["User: How many advertisements?"] --> SEC["🛡️ 4-Layer Security"]
+                    SEC --> PARSE["🔍 Parse Query Intent"]
+                    PARSE --> MODELS["🎯 Discover Models"]
+                    MODELS --> FIELDS["🗺️ Map Fields"]
+                    FIELDS --> BUILD["🔧 Build Query"]
+                    BUILD --> EXEC["📊 Execute via MCP"]
+                    EXEC --> BOOMI["Boomi DataHub"]
+                    BOOMI --> RESP["💬 Generate Response"]
+                    RESP --> USER["User: Found 247 advertisements"]
+                    
+                    classDef secClass fill:#fee2e2
+                    classDef processClass fill:#dbeafe
+                    classDef dataClass fill:#d1fae5
+                    classDef userClass fill:#fef3c7
+                    
+                    class SEC secClass
+                    class PARSE,MODELS,FIELDS,BUILD,EXEC,RESP processClass
+                    class BOOMI dataClass
+                    class START,USER userClass
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Detailed Processing Pipeline</div>
+            <div class="flow-ascii">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          📊 DATA FLOW PIPELINE                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│ 1. USER INPUT                                                              │
+│    "How many advertisements do we have?"                                   │
+│                                                                             │
+│ 2. SECURITY VALIDATION (4 Layers)                                         │
+│    Input Sanitization ──► Semantic Analysis ──► Business Context ──► LLM   │
+│                                                                             │
+│ 3. QUERY ANALYSIS                                                          │
+│    Intent: COUNT | Entities: [advertisements] | Type: SIMPLE               │
+│                                                                             │
+│ 4. MODEL DISCOVERY                                                         │
+│    Available: [Advertisements, Users, Opportunities, Engagements]          │
+│    Selected: Advertisements (confidence: 0.95)                             │
+│                                                                             │
+│ 5. FIELD MAPPING                                                           │
+│    Model: Advertisements                                                    │
+│    Fields: [id, name, status, campaign_id, created_date]                   │
+│    Mapping: COUNT(*) for total record count                                │
+│                                                                             │
+│ 6. QUERY CONSTRUCTION                                                      │
+│    {                                                                        │
+│      "model_id": "02367877-e560-4d82-b640-6a9f7ab96afa",                  │
+│      "fields": ["id"],                                                     │
+│      "filters": [],                                                        │
+│      "limit": 1000                                                         │
+│    }                                                                        │
+│                                                                             │
+│ 7. MCP EXECUTION                                                           │
+│    POST /mcp                                                               │
+│    Authorization: Bearer eyJhbGciOiJIUzI1NiIs...                          │
+│    MCP-Protocol-Version: 2025-06-18                                        │
+│                                                                             │
+│ 8. BOOMI DATAHUB QUERY                                                     │
+│    Execute query against Advertisements model                              │
+│    Apply user permissions (martha.stewart = executive)                     │
+│    Return results with metadata                                            │
+│                                                                             │
+│ 9. RESPONSE GENERATION                                                     │
+│    Raw: {"status": "success", "data": {"records": [...], "count": 247}}   │
+│    Generated: "I found 247 advertisements in your system."                 │
+│                                                                             │
+│ 10. USER DELIVERY                                                          │
+│     ✅ Result: I found 247 advertisements in your system.                  │
+│     📊 Records Found: 247                                                   │
+│     📋 Model Used: Advertisements                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Data Model Relationships</div>
+            <div class="mermaid">
+                graph LR
+                    subgraph "Boomi DataHub Models"
+                        ADS[Advertisements]
+                        USERS[Users]
+                        OPP[Opportunities]
+                        ENG[Engagements]
+                        PLAT[Platform-Users]
+                    end
+                    
+                    subgraph "Data Relationships"
+                        ADS --> CAMP[Campaigns]
+                        USERS --> PROF[User Profiles]
+                        OPP --> SALES[Sales Pipeline]
+                        ENG --> INTERACT[Interactions]
+                        PLAT --> SUB[Subscriptions]
+                    end
+                    
+                    subgraph "Access Patterns"
+                        EXEC[Executive Users] --> ADS
+                        EXEC --> USERS
+                        EXEC --> OPP
+                        EXEC --> ENG
+                        EXEC --> PLAT
+                        
+                        STD[Standard Users] -.-> DENIED[Access Denied]
+                    end
+                    
+                    classDef modelClass fill:#dbeafe
+                    classDef dataClass fill:#d1fae5
+                    classDef accessClass fill:#fef3c7
+                    classDef deniedClass fill:#fee2e2
+                    
+                    class ADS,USERS,OPP,ENG,PLAT modelClass
+                    class CAMP,PROF,SALES,INTERACT,SUB dataClass
+                    class EXEC,STD accessClass
+                    class DENIED deniedClass
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Error Handling and Recovery</div>
+            <div class="mermaid">
+                flowchart TD
+                    QUERY[Query Processing] --> CHECK{Validation Check}
+                    CHECK -->|Pass| EXECUTE[Execute Query]
+                    CHECK -->|Fail| ERR1[Validation Error]
+                    
+                    EXECUTE --> MCP{MCP Call}
+                    MCP -->|Success| PARSE[Parse Response]
+                    MCP -->|Fail| ERR2[MCP Error]
+                    
+                    PARSE --> VALID{Valid Data?}
+                    VALID -->|Yes| GENERATE[Generate Response]
+                    VALID -->|No| ERR3[Data Error]
+                    
+                    GENERATE --> SUCCESS[Success Response]
+                    
+                    ERR1 --> HANDLE[Error Handler]
+                    ERR2 --> HANDLE
+                    ERR3 --> HANDLE
+                    
+                    HANDLE --> RETRY{Retry?}
+                    RETRY -->|Yes| EXECUTE
+                    RETRY -->|No| USERERR[User Error Message]
+                    
+                    classDef successClass fill:#d1fae5
+                    classDef errorClass fill:#fee2e2
+                    classDef processClass fill:#dbeafe
+                    
+                    class SUCCESS successClass
+                    class ERR1,ERR2,ERR3,USERERR errorClass
+                    class QUERY,EXECUTE,PARSE,GENERATE,HANDLE processClass
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true, theme: 'default', securityLevel: 'loose',
+            flowchart: { htmlLabels: true, curve: 'basis' }
+        });
+    </script>
+</body>
+</html>

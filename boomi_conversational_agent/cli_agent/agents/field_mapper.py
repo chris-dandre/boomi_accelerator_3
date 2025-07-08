@@ -67,7 +67,20 @@ class FieldMapper:
         if not self.mcp_client:
             raise ValueError("MCP client not configured")
         
-        return self.mcp_client.get_model_fields(model_id)
+        print(f"🔍 Field Discovery - Getting fields for model: {model_id}")
+        
+        try:
+            print(f"🔍 Field Discovery - MCP client type: {type(self.mcp_client)}")
+            print(f"🔍 Field Discovery - MCP client methods: {[m for m in dir(self.mcp_client) if not m.startswith('_')]}")
+            result = self.mcp_client.get_model_fields(model_id)
+            print(f"🔍 Field Discovery - Raw result: {type(result)}")
+            print(f"🔍 Field Discovery - Result sample: {str(result)[:200]}...")
+            return result
+        except Exception as e:
+            print(f"❌ Field Discovery - Error getting fields: {e}")
+            print(f"❌ Field Discovery - Client type: {type(self.mcp_client)}")
+            return []
+    
     
     def map_entities_to_fields(self, entities: List[Dict[str, Any]], 
                              model_fields: List[Dict[str, Any]], 
@@ -138,10 +151,27 @@ class FieldMapper:
             model_fields = self.get_model_fields(model_id)
             
             # Extract fields list from model_fields response
-            if isinstance(model_fields, dict) and 'fields' in model_fields:
-                fields_list = model_fields['fields']
+            print(f"🔍 Debug - Raw model_fields structure: {type(model_fields)}")
+            print(f"🔍 Debug - Model_fields keys: {model_fields.keys() if isinstance(model_fields, dict) else 'Not a dict'}")
+            
+            if isinstance(model_fields, dict):
+                # Check if it's a nested MCP response
+                if 'fields' in model_fields and isinstance(model_fields['fields'], dict):
+                    # Extract the actual fields list from nested structure
+                    nested_fields = model_fields['fields']
+                    if 'fields' in nested_fields:
+                        fields_list = nested_fields['fields']
+                    else:
+                        fields_list = []
+                elif 'fields' in model_fields and isinstance(model_fields['fields'], list):
+                    # Direct fields list
+                    fields_list = model_fields['fields']
+                else:
+                    fields_list = []
             else:
                 fields_list = model_fields if isinstance(model_fields, list) else []
+            
+            print(f"🔍 Debug - Extracted fields_list: {len(fields_list) if isinstance(fields_list, list) else 'Not a list'} items")
             
             # Map entities to fields for this model with query context
             field_mapping = self.map_entities_to_fields(entities, fields_list, query_context)

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication & Authorization - Boomi Conversational Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #7c3aed;
+            --secondary-color: #6d28d9;
+            --accent-color: #8b5cf6;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #1f2937;
+            --light-bg: #f9fafb;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+        .header {
+            text-align: center; margin-bottom: 2rem;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem; border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-back {
+            display: inline-block; background: var(--accent-color);
+            color: white; padding: 0.5rem 1rem; border-radius: 0.5rem;
+            text-decoration: none; margin-bottom: 1rem;
+            transition: background 0.3s ease;
+        }
+
+        .nav-back:hover { background: var(--primary-color); }
+
+        .diagram-container {
+            background: rgba(255, 255, 255, 0.95); border-radius: 1rem;
+            padding: 2rem; margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .diagram-title {
+            font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem;
+            color: var(--primary-color); text-align: center;
+        }
+
+        .mermaid {
+            text-align: center; background: white; border-radius: 0.5rem;
+            padding: 1rem; margin: 1rem 0;
+        }
+
+        .auth-flow {
+            background: var(--dark-bg); color: #8b5cf6;
+            font-family: 'Courier New', monospace; padding: 2rem;
+            border-radius: 0.5rem; font-size: 0.75rem; line-height: 1.3;
+            overflow-x: auto; white-space: pre; margin: 1rem 0;
+        }
+
+        .flow-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem; margin-top: 2rem;
+        }
+
+        .flow-card {
+            background: var(--light-bg); border-radius: 0.5rem; padding: 1.5rem;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .flow-card h3 {
+            color: var(--primary-color); margin-bottom: 0.5rem; font-weight: 600;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+
+        .step-number {
+            background: var(--accent-color); color: white;
+            width: 1.5rem; height: 1.5rem; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem; font-weight: bold;
+        }
+
+        .flow-card p {
+            color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;
+        }
+
+        .code-block {
+            background: var(--dark-bg); color: #e5e7eb;
+            font-family: 'Courier New', monospace; padding: 1rem;
+            border-radius: 0.5rem; font-size: 0.8rem; line-height: 1.4;
+            overflow-x: auto; margin: 1rem 0;
+        }
+
+        .features-list {
+            list-style: none; margin-top: 1rem;
+        }
+
+        .features-list li {
+            padding: 0.25rem 0; color: var(--text-secondary); font-size: 0.85rem;
+        }
+
+        .features-list li:before {
+            content: "✓ "; color: var(--success-color); font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .header h1 { font-size: 2rem; }
+            .auth-flow { font-size: 0.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="nav-back">← Back to Architecture Home</a>
+        
+        <div class="header">
+            <h1>🔐 Authentication & Authorization</h1>
+            <p>OAuth 2.1 + PKCE with Role-Based Access Control</p>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">OAuth 2.1 + PKCE Authorization Flow</div>
+            <div class="mermaid">
+                sequenceDiagram
+                    participant User
+                    participant CLI
+                    participant AuthServer
+                    participant MCPServer
+                    participant Boomi
+                    
+                    User->>CLI: Enter Credentials
+                    Note over CLI: martha.stewart<br/>good.business.2024
+                    
+                    CLI->>CLI: Generate PKCE Challenge
+                    Note over CLI: code_verifier = random(43-128)<br/>code_challenge = SHA256(verifier)
+                    
+                    CLI->>AuthServer: Authorization Request
+                    Note over AuthServer: client_id, redirect_uri<br/>code_challenge, challenge_method
+                    
+                    AuthServer->>AuthServer: Validate Credentials
+                    AuthServer->>CLI: Authorization Code
+                    
+                    CLI->>AuthServer: Token Exchange
+                    Note over AuthServer: code, code_verifier<br/>client_id, redirect_uri
+                    
+                    AuthServer->>CLI: Access Token + Refresh Token
+                    Note over CLI: Bearer token<br/>expires_in: 28800 (8 hours)
+                    
+                    CLI->>MCPServer: API Request with Token
+                    Note over MCPServer: Authorization: Bearer {token}<br/>resource: https://localhost:8001
+                    
+                    MCPServer->>AuthServer: Token Introspection
+                    AuthServer->>MCPServer: Token Valid + User Info
+                    
+                    MCPServer->>Boomi: Authenticated Request
+                    Boomi->>MCPServer: Data Response
+                    MCPServer->>CLI: JSON-RPC Response
+                    CLI->>User: Business Data
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">OAuth 2.1 Flow Details</div>
+            <div class="auth-flow">
+┌─────────────────────────────────────────────────────────────┐
+│                 🔐 OAuth 2.1 + PKCE Flow                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ 1. User Login                                              │
+│    ┌──────────┐                                            │
+│    │   CLI    │──── Username/Password ────► │Auth Server│  │
+│    └──────────┘                             └────────────┘  │
+│                                                             │
+│ 2. PKCE Challenge                                          │
+│    ┌──────────┐                                            │
+│    │   CLI    │──── Code Challenge ────────► │Auth Server│  │
+│    └──────────┘     (SHA256 hash)           └────────────┘  │
+│                                                             │
+│ 3. Authorization Code                                      │
+│    ┌──────────┐                                            │
+│    │Auth Svr  │──── Auth Code + State ─────► │    CLI    │  │
+│    └──────────┘                             └────────────┘  │
+│                                                             │
+│ 4. Token Exchange                                          │
+│    ┌──────────┐                                            │
+│    │   CLI    │──── Code + Verifier ───────► │Auth Server│  │
+│    │          │◄─── Access Token ────────────│           │  │
+│    └──────────┘     + Refresh Token         └────────────┘  │
+│                                                             │
+│ 5. API Access                                              │
+│    ┌──────────┐                                            │
+│    │   CLI    │──── Bearer Token ──────────► │MCP Server │  │
+│    │          │◄─── Protected Resource ─────│           │  │
+│    └──────────┘                             └────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+            </div>
+        </div>
+
+        <div class="flow-grid">
+            <div class="flow-card">
+                <h3><span class="step-number">1</span>User Authentication</h3>
+                <p>Secure credential validation with enterprise user directory</p>
+                <ul class="features-list">
+                    <li>Username/password authentication</li>
+                    <li>Account validation against user store</li>
+                    <li>Role and permission retrieval</li>
+                    <li>Department and profile information</li>
+                    <li>Multi-factor authentication support</li>
+                </ul>
+            </div>
+
+            <div class="flow-card">
+                <h3><span class="step-number">2</span>PKCE Security</h3>
+                <p>Proof Key for Code Exchange prevents authorization code interception</p>
+                <ul class="features-list">
+                    <li>Cryptographically random code verifier</li>
+                    <li>SHA256 code challenge generation</li>
+                    <li>Protection against CSRF attacks</li>
+                    <li>Enhanced security for public clients</li>
+                    <li>OAuth 2.1 best practices compliance</li>
+                </ul>
+            </div>
+
+            <div class="flow-card">
+                <h3><span class="step-number">3</span>Token Management</h3>
+                <p>Secure token lifecycle with refresh and revocation capabilities</p>
+                <ul class="features-list">
+                    <li>JWT access tokens (8-hour expiry)</li>
+                    <li>Refresh token rotation</li>
+                    <li>Token introspection (RFC 7662)</li>
+                    <li>Token revocation (RFC 7009)</li>
+                    <li>Resource indicators (RFC 8707)</li>
+                </ul>
+            </div>
+
+            <div class="flow-card">
+                <h3><span class="step-number">4</span>Role-Based Access</h3>
+                <p>Fine-grained permissions based on user roles and data access policies</p>
+                <ul class="features-list">
+                    <li>Executive vs Standard user roles</li>
+                    <li>Data model access permissions</li>
+                    <li>Resource-level authorization</li>
+                    <li>Dynamic permission evaluation</li>
+                    <li>Audit trail for access decisions</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">User Roles and Permissions</div>
+            <div class="code-block">
+{
+  "users": {
+    "martha.stewart": {
+      "role": "executive",
+      "department": "Executive Leadership",
+      "permissions": [
+        "read:all_models",
+        "query:advertisements",
+        "query:users", 
+        "query:opportunities",
+        "query:engagements",
+        "query:platform_users"
+      ],
+      "data_access": true,
+      "admin_functions": false
+    },
+    "alex.smith": {
+      "role": "standard",
+      "department": "General Staff", 
+      "permissions": [],
+      "data_access": false,
+      "admin_functions": false
+    }
+  }
+}
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Token Structure and Validation</div>
+            <div class="mermaid">
+                graph TD
+                    TOKEN[JWT Access Token] --> HEADER[Header]
+                    TOKEN --> PAYLOAD[Payload]
+                    TOKEN --> SIGNATURE[Signature]
+                    
+                    HEADER --> ALG[Algorithm: HS256]
+                    HEADER --> TYP[Type: JWT]
+                    
+                    PAYLOAD --> SUB[Subject: user_id]
+                    PAYLOAD --> EXP[Expires: timestamp]
+                    PAYLOAD --> IAT[Issued At: timestamp]
+                    PAYLOAD --> ROLE[Role: executive/standard]
+                    PAYLOAD --> PERMS[Permissions: array]
+                    PAYLOAD --> RESOURCE[Resource: boomi://datahub]
+                    
+                    SIGNATURE --> SECRET[HMAC Secret]
+                    SIGNATURE --> VERIFY[Signature Verification]
+                    
+                    VERIFY --> VALID{Token Valid?}
+                    VALID -->|Yes| ALLOW[Allow Access]
+                    VALID -->|No| DENY[Deny Access]
+                    
+                    classDef tokenClass fill:#e1f5fe
+                    classDef processClass fill:#f3e5f5
+                    classDef resultClass fill:#e8f5e8
+                    
+                    class TOKEN,HEADER,PAYLOAD,SIGNATURE tokenClass
+                    class ALG,TYP,SUB,EXP,IAT,ROLE,PERMS,RESOURCE,SECRET,VERIFY processClass
+                    class VALID,ALLOW,DENY resultClass
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Security Features</div>
+            <div class="flow-grid">
+                <div class="flow-card">
+                    <h3>🔒 Token Security</h3>
+                    <ul class="features-list">
+                        <li>Short-lived access tokens (8 hours)</li>
+                        <li>Secure token storage in memory only</li>
+                        <li>Automatic token refresh handling</li>
+                        <li>Token revocation on logout</li>
+                    </ul>
+                </div>
+
+                <div class="flow-card">
+                    <h3>🛡️ Attack Prevention</h3>
+                    <ul class="features-list">
+                        <li>PKCE prevents code interception</li>
+                        <li>State parameter prevents CSRF</li>
+                        <li>Resource indicators prevent token confusion</li>
+                        <li>Rate limiting on auth endpoints</li>
+                    </ul>
+                </div>
+
+                <div class="flow-card">
+                    <h3>📋 Compliance</h3>
+                    <ul class="features-list">
+                        <li>OAuth 2.1 specification compliance</li>
+                        <li>RFC 7636 (PKCE) implementation</li>
+                        <li>RFC 8707 (Resource Indicators)</li>
+                        <li>Enterprise security standards</li>
+                    </ul>
+                </div>
+
+                <div class="flow-card">
+                    <h3>📊 Monitoring</h3>
+                    <ul class="features-list">
+                        <li>Authentication event logging</li>
+                        <li>Failed login attempt tracking</li>
+                        <li>Token usage analytics</li>
+                        <li>Security incident detection</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: { htmlLabels: true, curve: 'basis' },
+            sequence: { diagramMarginX: 50, diagramMarginY: 10, actorMargin: 50, width: 150, height: 65 }
+        });
+    </script>
+</body>
+</html>

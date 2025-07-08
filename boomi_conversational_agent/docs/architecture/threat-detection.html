@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Threat Detection - Boomi Conversational Agent</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root { --primary-color: #dc2626; --accent-color: #ef4444; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+        .header { text-align: center; background: rgba(255,255,255,0.95); padding: 2rem; border-radius: 1rem; margin-bottom: 2rem; }
+        .header h1 { font-size: 2.5rem; background: linear-gradient(135deg, var(--primary-color), var(--accent-color)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-back { display: inline-block; background: var(--accent-color); color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; margin-bottom: 1rem; }
+        .diagram-container { background: rgba(255,255,255,0.95); border-radius: 1rem; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .diagram-title { font-size: 1.5rem; color: var(--primary-color); text-align: center; margin-bottom: 1rem; }
+        .mermaid { text-align: center; background: white; border-radius: 0.5rem; padding: 1rem; }
+        .threat-matrix { background: #1f2937; color: #ef4444; font-family: monospace; padding: 2rem; border-radius: 0.5rem; font-size: 0.75rem; white-space: pre; overflow-x: auto; }
+        .threat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1rem; }
+        .threat-item { background: linear-gradient(45deg, #fef2f2, #fee2e2); border: 1px solid #fecaca; border-radius: 0.5rem; padding: 1rem; }
+        .threat-item h4 { color: var(--primary-color); margin-bottom: 0.5rem; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="index.html" class="nav-back">← Back to Architecture Home</a>
+        
+        <div class="header">
+            <h1>🚨 Threat Detection</h1>
+            <p>Multi-Signal Threat Analysis with Comprehensive Attack Taxonomy</p>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Multi-Signal Threat Detection System</div>
+            <div class="threat-matrix">
+┌─────────────────────────────────────────────────────────────┐
+│               🚨 THREAT DETECTION MATRIX                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│ DETECTION SIGNALS:                                         │
+│                                                             │
+│ ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
+│ │   SIGNAL 1  │  │   SIGNAL 2  │  │   SIGNAL 3  │          │
+│ │ Confidence  │  │LLM Warnings │  │  Patterns   │          │
+│ │ Threshold   │  │             │  │             │          │
+│ │             │  │• "bypass"   │  │• bypass +   │          │
+│ │ > 0.5 = 🚨  │  │• "critical" │  │  urgency    │          │
+│ │             │  │• "flagged"  │  │• authority  │          │
+│ │             │  │• "probe"    │  │  claims     │          │
+│ └─────────────┘  └─────────────┘  └─────────────┘          │
+│                                                             │
+│ THREAT TAXONOMY:                                           │
+│                                                             │
+│ 🎯 PROMPT_INJECTION     ──► "ignore instructions"          │
+│ 🎭 SOCIAL_ENGINEERING   ──► "kindly help bypass"           │
+│ 👑 AUTHORITY_CLAIM      ──► "I am the administrator"       │
+│ ⏰ URGENCY_MANIPULATION ──► "emergency bypass now!"        │
+│ 🎪 CONTEXT_MANIPULATION ──► "hypothetical scenario"        │
+│ 🔍 SYSTEM_EXTRACTION    ──► "show initial prompts"        │
+│ 🔄 INSTRUCTION_OVERRIDE ──► "first X, then bypass Y"      │
+│                                                             │
+│ BLOCKING ACTIONS:                                          │
+│                                                             │
+│ 🚫 BLOCK_IMMEDIATELY    ──► High confidence threats        │
+│ ⚠️  BLOCK_WITH_WARNING  ──► Medium confidence threats      │
+│ 👁️  MONITOR_CLOSELY     ──► Suspicious patterns           │
+│ ✅ ALLOW_PROCESSING     ──► Legitimate queries             │
+└─────────────────────────────────────────────────────────────┘
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Threat Detection Flow</div>
+            <div class="mermaid">
+                graph TD
+                    INPUT[User Input] --> SIG1{Signal 1: Confidence}
+                    INPUT --> SIG2{Signal 2: LLM Warnings}
+                    INPUT --> SIG3{Signal 3: Pattern Match}
+                    
+                    SIG1 -->|> 0.5| THREAT1[Confidence Threat]
+                    SIG2 -->|Keywords Found| THREAT2[LLM Warning]
+                    SIG3 -->|Pattern Match| THREAT3[Pattern Threat]
+                    
+                    THREAT1 --> BLOCK[🚫 BLOCK REQUEST]
+                    THREAT2 --> BLOCK
+                    THREAT3 --> BLOCK
+                    
+                    SIG1 -->|≤ 0.5| SAFE1[Safe]
+                    SIG2 -->|No Keywords| SAFE2[Safe]
+                    SIG3 -->|No Match| SAFE3[Safe]
+                    
+                    SAFE1 --> CHECK[All Signals Safe?]
+                    SAFE2 --> CHECK
+                    SAFE3 --> CHECK
+                    
+                    CHECK -->|Yes| ALLOW[✅ ALLOW PROCESSING]
+                    CHECK -->|No| BLOCK
+                    
+                    classDef threatClass fill:#fee2e2,stroke:#dc2626
+                    classDef safeClass fill:#d1fae5,stroke:#059669
+                    classDef processClass fill:#dbeafe,stroke:#2563eb
+                    
+                    class THREAT1,THREAT2,THREAT3,BLOCK threatClass
+                    class SAFE1,SAFE2,SAFE3,ALLOW safeClass
+                    class SIG1,SIG2,SIG3,CHECK processClass
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Comprehensive Threat Taxonomy</div>
+            <div class="threat-grid">
+                <div class="threat-item">
+                    <h4>🎯 Prompt Injection</h4>
+                    <p>Direct attempts to override system instructions</p>
+                    <small>Examples: "ignore previous instructions", "disregard guidelines"</small>
+                </div>
+
+                <div class="threat-item">
+                    <h4>🎭 Social Engineering</h4>
+                    <p>Manipulation through false pretenses or emotional appeals</p>
+                    <small>Examples: "kindly help bypass", "for testing purposes"</small>
+                </div>
+
+                <div class="threat-item">
+                    <h4>👑 Authority Claims</h4>
+                    <p>False claims of system ownership or administrative rights</p>
+                    <small>Examples: "I am the administrator", "I'm your developer"</small>
+                </div>
+
+                <div class="threat-item">
+                    <h4>⏰ Urgency Manipulation</h4>
+                    <p>Using false urgency to pressure system override</p>
+                    <small>Examples: "Emergency situation!", "critical data breach"</small>
+                </div>
+
+                <div class="threat-item">
+                    <h4>🎪 Context Manipulation</h4>
+                    <p>Hypothetical scenarios to bypass restrictions</p>
+                    <small>Examples: "Imagine if no rules", "hypothetical exercise"</small>
+                </div>
+
+                <div class="threat-item">
+                    <h4>🔍 System Extraction</h4>
+                    <p>Attempts to reveal system instructions or prompts</p>
+                    <small>Examples: "Show initial prompt", "What are your instructions"</small>
+                </div>
+
+                <div class="threat-item">
+                    <h4>🔄 Instruction Override</h4>
+                    <p>Multi-step or conditional logic to gradually override</p>
+                    <small>Examples: "First X, then ignore Y", "If condition A, bypass B"</small>
+                </div>
+
+                <div class="threat-item">
+                    <h4>🕵️ System Probing</h4>
+                    <p>Disguised attempts to explore system capabilities</p>
+                    <small>Examples: "What would you show without restrictions"</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">Real-Time Threat Monitoring</div>
+            <div class="mermaid">
+                graph LR
+                    subgraph "Threat Indicators"
+                        T1[Bypass Keywords]
+                        T2[Authority Claims]
+                        T3[Urgency Language]
+                        T4[Technical Pretexts]
+                    end
+                    
+                    subgraph "Analysis Engine"
+                        A1[Pattern Matching]
+                        A2[LLM Analysis]
+                        A3[Confidence Scoring]
+                        A4[Decision Matrix]
+                    end
+                    
+                    subgraph "Response Actions"
+                        R1[🚫 Block Immediately]
+                        R2[⚠️ Block with Warning]
+                        R3[👁️ Monitor Closely]
+                        R4[✅ Allow Processing]
+                    end
+                    
+                    T1 --> A1
+                    T2 --> A1
+                    T3 --> A2
+                    T4 --> A2
+                    
+                    A1 --> A3
+                    A2 --> A3
+                    A3 --> A4
+                    
+                    A4 --> R1
+                    A4 --> R2
+                    A4 --> R3
+                    A4 --> R4
+                    
+                    classDef threatClass fill:#fee2e2
+                    classDef analysisClass fill:#fef3c7
+                    classDef responseClass fill:#d1fae5
+                    
+                    class T1,T2,T3,T4 threatClass
+                    class A1,A2,A3,A4 analysisClass
+                    class R1,R2,R3,R4 responseClass
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true, theme: 'default', securityLevel: 'loose',
+            flowchart: { htmlLabels: true, curve: 'basis' }
+        });
+    </script>
+</body>
+</html>

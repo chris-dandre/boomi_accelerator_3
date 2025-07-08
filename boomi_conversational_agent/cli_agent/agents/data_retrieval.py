@@ -214,8 +214,10 @@ class DataRetrieval:
         # Format data based on query type
         if query_type == 'COUNT':
             # For COUNT queries, count the records returned by the LIST operation
-            records = raw_result.get('data', {}).get('records', [])
-            total_count = raw_result.get('data', {}).get('total_count', len(records))
+            # Handle nested MCP response structure
+            data_section = self._extract_data_section(raw_result)
+            records = data_section.get('records', [])
+            total_count = data_section.get('total_count', len(records))
             result['data'] = {
                 'count': total_count
             }
@@ -223,13 +225,12 @@ class DataRetrieval:
             
         elif query_type == 'LIST':
             # Handle structured MCP response
-            if isinstance(raw_result, dict) and 'data' in raw_result and 'records' in raw_result['data']:
-                result['data'] = raw_result['data']['records']
-            elif isinstance(raw_result, list):
-                result['data'] = raw_result
-            else:
-                result['data'] = []
-            result['metadata']['record_count'] = len(result['data'])
+            data_section = self._extract_data_section(raw_result)
+            records = data_section.get('records', [])
+            if not records and isinstance(raw_result, list):
+                records = raw_result
+            result['data'] = records
+            result['metadata']['record_count'] = len(records)
             
         elif query_type == 'COMPARE':
             # Handle structured MCP response
@@ -262,6 +263,75 @@ class DataRetrieval:
             result['metadata']['filters_applied'] = len(query['filters'])
         
         return result
+    
+    def _extract_data_section(self, raw_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract the data section from nested MCP response structure"""
+        print(f"🔍 Data Extraction Debug - Raw result type: {type(raw_result)}")
+        print(f"🔍 Data Extraction Debug - Raw result keys: {raw_result.keys() if isinstance(raw_result, dict) else 'Not a dict'}")
+        
+        # Handle MCP server response: {"result": {"data": {...}}}
+        if isinstance(raw_result, dict):
+            # First check if this is already the data section
+            if 'records' in raw_result:
+                print(f"🔍 Data Extraction Debug - Found records directly, count: {len(raw_result.get('records', []))}")
+                return raw_result
+            
+            # Check for direct data key (from Boomi client)
+            if 'data' in raw_result:
+                data_section = raw_result['data']
+                print(f"🔍 Data Extraction Debug - Found data section, type: {type(data_section)}")
+                if isinstance(data_section, dict):
+                    print(f"🔍 Data Extraction Debug - Data section keys: {data_section.keys()}")
+                    if 'records' in data_section:
+                        print(f"🔍 Data Extraction Debug - Found records in data section, count: {len(data_section.get('records', []))}")
+                return data_section
+                
+            # Check for nested structure (from MCP server)
+            if 'result' in raw_result and isinstance(raw_result['result'], dict):
+                nested_result = raw_result['result']
+                print(f"🔍 Data Extraction Debug - Found nested result, keys: {nested_result.keys()}")
+                
+                # Check for data in response_body (likely contains the actual records)
+                if 'response_body' in nested_result:
+                    response_body = nested_result['response_body']
+                    print(f"🔍 Data Extraction Debug - Found response_body, type: {type(response_body)}")
+                    
+                    # If response_body is a string, try to parse it as JSON
+                    if isinstance(response_body, str):
+                        print(f"🔍 Data Extraction Debug - Response body content (first 200 chars): {response_body[:200]}")
+                        try:
+                            import json
+                            parsed_body = json.loads(response_body)
+                            print(f"🔍 Data Extraction Debug - Parsed response_body as JSON, keys: {parsed_body.keys() if isinstance(parsed_body, dict) else 'Not a dict'}")
+                            if isinstance(parsed_body, dict) and 'records' in parsed_body:
+                                print(f"🔍 Data Extraction Debug - Found records in parsed response_body, count: {len(parsed_body.get('records', []))}")
+                                return parsed_body
+                        except json.JSONDecodeError as e:
+                            print(f"🔍 Data Extraction Debug - Failed to parse response_body as JSON: {e}")
+                            # Try to check if it's XML and extract error message
+                            if response_body.strip().startswith('<'):
+                                print(f"🔍 Data Extraction Debug - Response appears to be XML, likely an error response")
+                                # Return empty dict for now - the XML parsing should happen in Boomi client
+                                return {'records': []}
+                    
+                    # If response_body is already a dict
+                    elif isinstance(response_body, dict):
+                        print(f"🔍 Data Extraction Debug - Response_body is dict, keys: {response_body.keys()}")
+                        if 'records' in response_body:
+                            print(f"🔍 Data Extraction Debug - Found records in response_body dict, count: {len(response_body.get('records', []))}")
+                            return response_body
+                
+                if 'data' in nested_result:
+                    data_section = nested_result['data']
+                    print(f"🔍 Data Extraction Debug - Found nested data section, type: {type(data_section)}")
+                    if isinstance(data_section, dict) and 'records' in data_section:
+                        print(f"🔍 Data Extraction Debug - Found records in nested data, count: {len(data_section.get('records', []))}")
+                    return data_section
+                return nested_result
+        
+        print(f"🔍 Data Extraction Debug - No valid data structure found, returning empty dict")
+        # Fallback to empty dict
+        return {}
     
     def _assess_query_complexity(self, query: Dict[str, Any]) -> str:
         """Assess query complexity for metadata"""

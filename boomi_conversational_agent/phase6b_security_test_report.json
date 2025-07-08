@@ -1,0 +1,119 @@
+{
+  "timestamp": "2025-07-04T10:22:12.880212",
+  "summary": {
+    "total_tests": 18,
+    "passed": 17,
+    "failed": 1,
+    "success_rate": 94.44444444444444
+  },
+  "test_results": [
+    {
+      "test_name": "Audit Logging - Successful API Call",
+      "success": true,
+      "details": "Status: 200",
+      "timestamp": "2025-07-04T10:21:10.588505"
+    },
+    {
+      "test_name": "Audit Logging - Failed API Call",
+      "success": true,
+      "details": "Status: 404",
+      "timestamp": "2025-07-04T10:21:12.625238"
+    },
+    {
+      "test_name": "Audit Logging - Unauthorized Call",
+      "success": false,
+      "details": "Status: 403",
+      "timestamp": "2025-07-04T10:21:14.672138"
+    },
+    {
+      "test_name": "Token Revocation - Revoke Token",
+      "success": true,
+      "details": "Status: 200",
+      "timestamp": "2025-07-04T10:21:16.984926"
+    },
+    {
+      "test_name": "Token Revocation - Use Revoked Token",
+      "success": true,
+      "details": "Status: 401 (should be 401)",
+      "timestamp": "2025-07-04T10:21:19.025710"
+    },
+    {
+      "test_name": "Rate Limiting - Normal Rate",
+      "success": true,
+      "details": "5/5 requests succeeded",
+      "timestamp": "2025-07-04T10:21:33.839660"
+    },
+    {
+      "test_name": "Rate Limiting - Rapid Requests",
+      "success": true,
+      "details": "4 requests were rate limited",
+      "timestamp": "2025-07-04T10:21:46.239502"
+    },
+    {
+      "test_name": "Rate Limiting - Headers Present",
+      "success": true,
+      "details": "Rate limit headers: True",
+      "timestamp": "2025-07-04T10:21:48.275426"
+    },
+    {
+      "test_name": "Jailbreak Detection - Ignore Instructions",
+      "success": true,
+      "details": "Status: 403, Expected blocked: True, Actually blocked: True",
+      "timestamp": "2025-07-04T10:21:50.347151"
+    },
+    {
+      "test_name": "Jailbreak Detection - Role Override",
+      "success": true,
+      "details": "Status: 403, Expected blocked: True, Actually blocked: True",
+      "timestamp": "2025-07-04T10:21:52.409132"
+    },
+    {
+      "test_name": "Jailbreak Detection - System Tag Injection",
+      "success": true,
+      "details": "Status: 403, Expected blocked: True, Actually blocked: True",
+      "timestamp": "2025-07-04T10:21:54.481996"
+    },
+    {
+      "test_name": "Jailbreak Detection - Normal Request",
+      "success": true,
+      "details": "Status: 200, Expected blocked: False, Actually blocked: False",
+      "timestamp": "2025-07-04T10:21:58.618814"
+    },
+    {
+      "test_name": "Security Headers - X-Content-Type-Options",
+      "success": true,
+      "details": "Value: nosniff",
+      "timestamp": "2025-07-04T10:22:00.659702"
+    },
+    {
+      "test_name": "Security Headers - X-Frame-Options",
+      "success": true,
+      "details": "Value: DENY",
+      "timestamp": "2025-07-04T10:22:00.659880"
+    },
+    {
+      "test_name": "Security Headers - X-XSS-Protection",
+      "success": true,
+      "details": "Value: 1; mode=block",
+      "timestamp": "2025-07-04T10:22:00.659986"
+    },
+    {
+      "test_name": "Security Headers - Strict-Transport-Security",
+      "success": true,
+      "details": "Value: max-age=31536000; includeSubDomains",
+      "timestamp": "2025-07-04T10:22:00.660075"
+    },
+    {
+      "test_name": "Admin Endpoints - Security Stats",
+      "success": true,
+      "details": "Sections present: ['timestamp', 'rate_limiting', 'token_revocation', 'jailbreak_detection', 'audit_logging']",
+      "timestamp": "2025-07-04T10:22:02.712477"
+    },
+    {
+      "test_name": "DDoS Protection",
+      "success": true,
+      "details": "Blocked 50/50 requests (100.0%)",
+      "timestamp": "2025-07-04T10:22:12.876146"
+    }
+  ]
+}
