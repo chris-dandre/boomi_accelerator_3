@@ -22,3 +22,12 @@ aiohttp>=3.8.0             # Additional async HTTP support
 
 # MCP integration (will reference existing implementation)
 # Note: We'll import from ../boomi_datahub_mcp_server/boomi_mcp_server/
+
+# Phase 8A: Streamlit Web Interface
+streamlit>=1.28.0           # Web interface framework
+streamlit-chat>=0.1.0       # Enhanced chat components (optional)
+
+# Additional web dependencies
+fastapi>=0.104.0            # API framework (for unified server)
+uvicorn>=0.24.0             # ASGI server
+websockets>=11.0.0          # WebSocket support for real-time features

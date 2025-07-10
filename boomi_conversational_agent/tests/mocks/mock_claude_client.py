@@ -13,7 +13,7 @@ class MockClaudeClient:
         self.last_prompt = None
         self.api_calls = []  # Track all API calls for testing
     
-    def query(self, prompt: str) -> str:
+    def query(self, prompt: str, max_tokens: int = None) -> str:
         """Return mock Claude responses based on prompt content"""
         self.call_count += 1
         self.last_prompt = prompt

@@ -242,25 +242,33 @@ class QueryBuilder:
         """Build filters from field mappings"""
         filters = []
         
+        print(f"   🔍 Filter Debug - Processing {len(field_mapping)} field mappings:")
         for entity_text, mapping_info in field_mapping.items():
             field_name = mapping_info.get('field_name')
             confidence = mapping_info.get('confidence', 0.0)
+            
+            print(f"      📌 '{entity_text}' → {field_name} (confidence: {confidence:.2f})")
             
             # Only include high-confidence mappings as filters
             if confidence >= 0.7 and field_name:
                 # Skip generic terms that represent what we're counting, not filtering criteria
                 if self._should_skip_as_filter(entity_text, field_name):
-                    print(f"   ⏭️  Skipping '{entity_text}' as filter (generic term)")
+                    print(f"         ⏭️  Skipping '{entity_text}' as filter (generic term)")
                     continue
                     
                 filter_item = {
                     'fieldId': field_name,
                     'operator': self._determine_operator(entity_text, field_name),
                     'value': entity_text,
-                    'confidence': confidence
+                    'confidence': confidence,
+                    'reasoning': f"Field mapping: {entity_text} → {field_name}"
                 }
                 filters.append(filter_item)
+                print(f"         ✅ Created filter: {field_name} = '{entity_text}'")
+            else:
+                print(f"         ❌ Skipped: confidence {confidence:.2f} < 0.7 or no field_name")
         
+        print(f"   🎯 Filter Debug - Created {len(filters)} filters total")
         return filters
     
     def _should_skip_as_filter(self, entity_text: str, field_name: str) -> bool:
@@ -586,19 +594,19 @@ Respond in JSON format:
         return None
     
     def _build_intelligent_filters(self, field_mapping: Dict[str, Any], claude_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Build filters based on Claude's analysis instead of simple patterns"""
+        """Build filters based on Claude's analysis and field mappings"""
         
         filters = []
         
-        # If Claude detected this as a distinct values request, don't add filters
-        if claude_analysis.get('distinct_values_requested'):
-            print(f"   🧠 LLM Decision: No filters needed - requesting distinct values")
-            return filters
+        # First, build filters from field mappings (this is crucial!)
+        print(f"   🧠 LLM Decision: Building filters from field mappings")
+        mapping_filters = self._build_filters(field_mapping)
+        filters.extend(mapping_filters)
         
-        # Use Claude's recommended filters
+        # Then add any additional filters from Claude's analysis
         claude_filters = claude_analysis.get('filters', [])
         if claude_filters:
-            print(f"   🧠 LLM Decision: Using {len(claude_filters)} recommended filters")
+            print(f"   🧠 LLM Decision: Adding {len(claude_filters)} additional Claude filters")
             for claude_filter in claude_filters:
                 filter_item = {
                     'fieldId': claude_filter.get('field'),
@@ -608,11 +616,15 @@ Respond in JSON format:
                     'reasoning': f"LLM Analysis: {claude_filter.get('reasoning', 'Recommended by Claude')}"
                 }
                 filters.append(filter_item)
-            return filters
         
-        # If no Claude filters, fall back to the original pattern-based method
-        print(f"   🔄 LLM Decision: No specific filters recommended, using pattern analysis")
-        return self._build_filters_original(field_mapping)
+        # Note: Distinct values requests can still have filters!
+        # Example: "What products is Sony advertising?" = Filter by ADVERTISER=Sony, then get distinct PRODUCT values
+        if claude_analysis.get('distinct_values_requested'):
+            print(f"   🧠 LLM Decision: Will apply {len(filters)} filters, then get distinct values")
+        else:
+            print(f"   🧠 LLM Decision: Using {len(filters)} filters for regular query")
+        
+        return filters
     
     def _build_filters_original(self, field_mapping: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Original pattern-based filter building (renamed from _build_filters)"""

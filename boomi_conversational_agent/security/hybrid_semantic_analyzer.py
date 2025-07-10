@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 class LLMProvider(Enum):
     """Supported LLM providers"""
     CLAUDE = "claude"
+    ANTHROPIC = "anthropic"  # Alias for Claude
     OPENAI = "openai"
     LOCAL = "local"
 
