@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authentication & Authorization - Boomi Conversational Agent</title>
+    <title>Authentication & Authorization - SWX MCP Client-Server Architecture for Boomi DataHub</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <style>
         :root {
@@ -134,8 +134,9 @@
         <a href="index.html" class="nav-back">← Back to Architecture Home</a>
         
         <div class="header">
+            <img src="../logos/20241013_Synapsewerx_Logo_Positive-01.png" alt="Synapsewerx Logo" style="height: 60px; margin-bottom: 1rem;">
             <h1>🔐 Authentication & Authorization</h1>
-            <p>OAuth 2.1 + PKCE with Role-Based Access Control</p>
+            <p>SWX MCP OAuth 2.1 + PKCE with Role-Based Access Control</p>
         </div>
 
         <div class="diagram-container">
@@ -149,7 +150,7 @@
                     participant Boomi
                     
                     User->>CLI: Enter Credentials
-                    Note over CLI: martha.stewart<br/>good.business.2024
+                    Note over CLI: sarah.chen<br/>executive.access.2024
                     
                     CLI->>CLI: Generate PKCE Challenge
                     Note over CLI: code_verifier = random(43-128)<br/>code_challenge = SHA256(verifier)
@@ -271,7 +272,7 @@
             <div class="code-block">
 {
   "users": {
-    "martha.stewart": {
+    "sarah.chen": {
       "role": "executive",
       "department": "Executive Leadership",
       "permissions": [

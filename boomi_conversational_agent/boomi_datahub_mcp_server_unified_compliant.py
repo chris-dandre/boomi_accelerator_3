@@ -7,7 +7,7 @@ Combines all Phase 5-7 capabilities with full MCP OAuth 2.1 compliance:
 - MCP-Protocol-Version header negotiation  
 - Bearer token validation for all MCP requests
 - Complete security stack integration
-- Role-based access control (Martha Stewart vs Alex Smith)
+- Role-based access control (Sarah Chen vs Alex Smith)
 
 This is the SINGLE SERVER that provides everything needed for MCP-compliant conversational AI.
 """
@@ -46,8 +46,7 @@ except ImportError:
 # Import existing OAuth 2.1 infrastructure
 try:
     from oauth_server import (
-        OAUTH_CONFIG, OAUTH_SCOPES, USER_SCOPES, JWT_SECRET_KEY, JWT_ALGORITHM,
-        CLIENT_REGISTRY
+        OAUTH_CONFIG, USER_SCOPES, JWT_SECRET_KEY, JWT_ALGORITHM
     )
     OAUTH_AVAILABLE = True
     print("✅ OAuth 2.1 infrastructure imported")
@@ -178,7 +177,7 @@ def get_security_analyzer() -> Optional[HybridSemanticAnalyzer]:
         try:
             llm_config = LLMConfig(
                 provider=LLMProvider.ANTHROPIC,
-                model="claude-3-sonnet-20240229",
+                model_name="claude-3-sonnet-20240229",
                 api_key="demo-key",
                 max_tokens=150,
                 temperature=0.1
@@ -395,6 +394,109 @@ async def oauth_protected_resource_metadata():
         "introspection_endpoint": "http://localhost:8001/oauth/introspect",
         "revocation_endpoint": "http://localhost:8001/oauth/revoke"
     }
+
+# OAuth 2.1 Token Introspection Endpoint (RFC 7662) - Required for MCP June 2025 compliance
+@app.post("/oauth/introspect")
+async def oauth_introspect(request: Request):
+    """
+    OAuth 2.1 Token Introspection Endpoint (RFC 7662)
+    Required for MCP June 2025 compliance
+    """
+    try:
+        # Parse form data
+        form_data = await request.form()
+        token = form_data.get("token")
+        
+        if not token:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "invalid_request", "error_description": "Missing token parameter"}
+            )
+        
+        print(f"🔍 OAuth Introspection - Token: {token[:50]}...")
+        
+        # Validate the token using existing JWT validation
+        token_payload = MCPOAuthValidator.validate_bearer_token(f"Bearer {token}")
+        
+        if not token_payload:
+            # Token is invalid or expired
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "active": False
+                }
+            )
+        
+        # Token is valid - return introspection response
+        current_time = int(datetime.now().timestamp())
+        
+        # Get user information from token payload
+        username = token_payload.get("sub", "unknown")
+        user_scopes = token_payload.get("scope", "").split()
+        
+        # Map to user permissions from USER_SCOPES
+        user_permissions = []
+        role = "unknown"
+        has_data_access = False
+        
+        if OAUTH_AVAILABLE and username in USER_SCOPES:
+            user_permissions = USER_SCOPES[username]
+            
+            # Determine role based on permissions
+            if "read:all" in user_permissions:
+                role = "executive"
+                has_data_access = True
+            elif "read:advertisements" in user_permissions:
+                role = "manager"
+                has_data_access = True
+            elif "none" in user_permissions:
+                role = "clerk"
+                has_data_access = False
+            else:
+                role = "user"
+                has_data_access = True
+        else:
+            # Dev mode or unknown user
+            role = "executive"  # Default for testing
+            has_data_access = True
+            user_permissions = ["read:all"]
+        
+        introspection_response = {
+            "active": True,
+            "client_id": token_payload.get("client_id", "boomi-mcp-client"),
+            "username": username,
+            "scope": " ".join(user_scopes) if user_scopes else "mcp:read",
+            "exp": token_payload.get("exp", current_time + 3600),
+            "iat": token_payload.get("iat", current_time),
+            "sub": username,
+            "aud": token_payload.get("aud", "boomi-mcp-server"),
+            "iss": token_payload.get("iss", "http://localhost:8001"),
+            "token_type": "Bearer",
+            
+            # Enhanced user context for MCP June 2025
+            "role": role,
+            "permissions": user_permissions,
+            "has_data_access": has_data_access,
+            "mcp_compliance": "2025-06-18"
+        }
+        
+        print(f"✅ OAuth Introspection Success:")
+        print(f"   User: {username}")
+        print(f"   Role: {role}")
+        print(f"   Data Access: {has_data_access}")
+        print(f"   Permissions: {user_permissions}")
+        
+        return JSONResponse(
+            status_code=200,
+            content=introspection_response
+        )
+        
+    except Exception as e:
+        print(f"❌ OAuth Introspection Error: {e}")
+        return JSONResponse(
+            status_code=200,
+            content={"active": False}
+        )
 
 # Health check endpoint
 @app.get("/health")
@@ -1127,7 +1229,7 @@ def main():
         print("   • PKCE (RFC 7636) + Resource Indicators (RFC 8707)")
         print("   • Bearer token in Authorization header")
         print("   • Protected Resource Metadata (RFC 9728)")
-        print("   • Role-based access: Martha Stewart (full) vs Alex Smith (denied)")
+        print("   • Role-based access: Sarah Chen (executive) vs Alex Smith (clerk)")
     else:
         print(f"\n⚠️  Development Mode:")
         print("   • OAuth authentication disabled")

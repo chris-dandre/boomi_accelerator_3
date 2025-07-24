@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Architecture - Boomi Conversational Agent</title>
+    <title>Security Architecture - SWX MCP Client-Server Architecture for Boomi DataHub</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <style>
         :root {
@@ -281,8 +281,9 @@
         <a href="index.html" class="nav-back">← Back to Architecture Home</a>
         
         <div class="header">
+            <img src="../logos/20241013_Synapsewerx_Logo_Positive-01.png" alt="Synapsewerx Logo" style="height: 60px; margin-bottom: 1rem;">
             <h1>🛡️ Security Architecture</h1>
-            <p>4-Layer Defense System with Advanced Threat Detection</p>
+            <p>SWX MCP 4-Layer Defense System with Advanced Threat Detection</p>
         </div>
 
         <div class="diagram-container">
@@ -322,36 +323,51 @@
         </div>
 
         <div class="diagram-container">
-            <div class="diagram-title">Security Processing Flow</div>
+            <div class="diagram-title">Accurate Security Processing Flow (VP Demo Implementation)</div>
             <div class="mermaid">
                 graph TD
-                    START[User Query] --> S1[Layer 1: Input Sanitization]
+                    START[User Query] --> AUTH[🔐 Bearer Token Validation]
+                    AUTH -->|Invalid| AUTHFAIL[🚫 Authentication Failed]
+                    AUTH -->|Valid| S1[Layer 1: Input Sanitization + LLM Reasoning]
                     
-                    S1 --> S1_CHECK{Suspicious Input?}
-                    S1_CHECK -->|Yes| BLOCK1[🚫 Block: Input Threat]
-                    S1_CHECK -->|No| S2[Layer 2: Semantic Analysis]
+                    S1 --> S1_LLM[🧠 LLM Analysis: Input Safety]
+                    S1_LLM --> S1_CHECK{Issues Found?}
+                    S1_CHECK -->|Yes| S1_RESOLVE[🔧 Resolve Issues]
+                    S1_CHECK -->|No| S2[Layer 2: Semantic Threat Detection + LLM Reasoning]
+                    S1_RESOLVE --> S2
                     
-                    S2 --> S2_CHECK{Threat Detected?}
-                    S2_CHECK -->|Yes| BLOCK2[🚫 Block: Semantic Threat]
-                    S2_CHECK -->|No| S3[Layer 3: Business Context]
+                    S2 --> S2_LLM[🧠 LLM Analysis: Threat Patterns + Confidence Scoring]
+                    S2_LLM --> S2_CHECK{Threat Confidence > Threshold?}
+                    S2_CHECK -->|Yes| BLOCK2[🛡️ Graceful Security Response]
+                    S2_CHECK -->|No| S3[Layer 3: Business Context + Role Analysis]
                     
-                    S3 --> S3_CHECK{Business Query?}
-                    S3_CHECK -->|No| BLOCK3[🚫 Block: Non-Business]
-                    S3_CHECK -->|Yes| S4[Layer 4: Final LLM Approval]
+                    S3 --> S3_LLM[🧠 LLM Analysis: Role Appropriateness]
+                    S3_LLM --> S3_CHECK{Appropriate for Role?}
+                    S3_CHECK -->|No| BLOCK3[🏢 Graceful Business Context Response]
+                    S3_CHECK -->|Yes| S4[Layer 4: Final LLM Security Approval]
                     
-                    S4 --> LLM[🤖 LLM Analysis]
-                    LLM --> FINAL{LLM Decision}
-                    FINAL -->|Deny| BLOCK4[🚫 Block: LLM Denial]
-                    FINAL -->|Approve| PROCESS[✅ Process Query]
-                    FINAL -->|Error| FAILSAFE[🛡️ Fail-Safe Block]
+                    S4 --> S4_LLM[🧠 Conservative LLM Decision Making]
+                    S4_LLM --> S4_FINAL{Final Security Decision}
+                    S4_FINAL -->|BLOCK| BLOCK4[🚫 Graceful Policy Violation Response]
+                    S4_FINAL -->|APPROVE| PROCESS[✅ Process Query with Entity Extraction]
+                    S4_FINAL -->|ERROR| FAILSAFE[🛡️ Fail-Safe Default Deny]
+                    
+                    BLOCK2 --> RESPONSE1[📝 Professional Security Message + User Guidance]
+                    BLOCK3 --> RESPONSE2[📝 Role-Specific Business Message + Next Steps]
+                    BLOCK4 --> RESPONSE3[📝 Policy Compliance Message + Admin Contact]
+                    AUTHFAIL --> RESPONSE4[📝 Authentication Help + Role-Specific Credentials]
                     
                     classDef blockClass fill:#fee2e2,stroke:#dc2626,stroke-width:2px
                     classDef processClass fill:#d1fae5,stroke:#059669,stroke-width:2px
                     classDef layerClass fill:#dbeafe,stroke:#2563eb,stroke-width:2px
+                    classDef llmClass fill:#fef3c7,stroke:#f59e0b,stroke-width:2px
+                    classDef responseClass fill:#f3e8ff,stroke:#8b5cf6,stroke-width:2px
                     
-                    class BLOCK1,BLOCK2,BLOCK3,BLOCK4,FAILSAFE blockClass
+                    class BLOCK2,BLOCK3,BLOCK4,AUTHFAIL,FAILSAFE blockClass
                     class PROCESS processClass
-                    class S1,S2,S3,S4 layerClass
+                    class AUTH,S1,S2,S3,S4 layerClass
+                    class S1_LLM,S2_LLM,S3_LLM,S4_LLM llmClass
+                    class RESPONSE1,RESPONSE2,RESPONSE3,RESPONSE4 responseClass
             </div>
         </div>
 
@@ -406,6 +422,55 @@
                     <li>Context-aware reasoning</li>
                     <li>Edge case protection</li>
                 </ul>
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <div class="diagram-title">🎯 VP Demo Security Enhancements</div>
+            <div class="security-grid">
+                <div class="security-card">
+                    <h3>🧠 LLM Reasoning Transparency</h3>
+                    <p>Real-time display of Claude's security analysis at each layer</p>
+                    <ul class="features-list">
+                        <li>Layer-by-layer reasoning visibility</li>
+                        <li>Confidence scoring display</li>
+                        <li>Transparent decision-making process</li>
+                        <li>Executive-ready AI explanations</li>
+                    </ul>
+                </div>
+
+                <div class="security-card">
+                    <h3>🛡️ Graceful Security Responses</h3>
+                    <p>Professional, helpful responses instead of generic error messages</p>
+                    <ul class="features-list">
+                        <li>Specific threat type identification</li>
+                        <li>Actionable user guidance</li>
+                        <li>Role-appropriate recommendations</li>
+                        <li>Professional tone for all security blocks</li>
+                    </ul>
+                </div>
+
+                <div class="security-card">
+                    <h3>🔐 Enhanced Authentication Flow</h3>
+                    <p>Bearer token validation with role-specific error handling</p>
+                    <ul class="features-list">
+                        <li>OAuth 2.1 bearer token validation</li>
+                        <li>Role-specific authentication guidance</li>
+                        <li>Secure token handling (no display on UI)</li>
+                        <li>Professional login experience</li>
+                    </ul>
+                </div>
+
+                <div class="security-card">
+                    <h3>📊 Executive Demonstration Value</h3>
+                    <p>VP-ready showcase of enterprise security capabilities</p>
+                    <ul class="features-list">
+                        <li>Professional architectural layering</li>
+                        <li>Real-time threat detection demonstration</li>
+                        <li>Business context validation showcase</li>
+                        <li>Enterprise-grade security presentation</li>
+                    </ul>
+                </div>
             </div>
         </div>
 
