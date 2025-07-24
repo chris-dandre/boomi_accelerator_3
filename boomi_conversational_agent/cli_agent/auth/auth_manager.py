@@ -16,6 +16,7 @@ from enum import Enum
 class UserRole(Enum):
     """User roles with different access levels"""
     EXECUTIVE = "executive"
+    MANAGER = "manager"
     CLERK = "clerk"
     ADMIN = "admin"
 
@@ -58,19 +59,33 @@ class AuthManager:
     def _load_user_database(self) -> Dict[str, User]:
         """Load user database with demo personas"""
         users_data = {
-            "martha.stewart": {
-                "username": "martha.stewart",
-                "email": "martha.stewart@company.com",
+            "sarah.chen": {
+                "username": "sarah.chen",
+                "email": "sarah.chen@company.com",
                 "role": "executive",
-                "full_name": "Martha Stewart",
+                "full_name": "Sarah Chen",
                 "department": "Executive Leadership",
-                "password_hash": self._hash_password("good.business.2024"),
+                "password_hash": self._hash_password("executive.access.2024"),
                 "permissions": [
                     "read_all_models",
                     "read_all_fields", 
                     "complex_queries",
                     "financial_data",
                     "strategic_analytics"
+                ],
+                "created_at": "2024-01-01T00:00:00Z",
+                "active": True
+            },
+            "david.williams": {
+                "username": "david.williams",
+                "email": "david.williams@company.com",
+                "role": "manager",
+                "full_name": "David Williams",
+                "department": "Business Intelligence",
+                "password_hash": self._hash_password("manager.access.2024"),
+                "permissions": [
+                    "read_all_models",
+                    "read_all_fields"
                 ],
                 "created_at": "2024-01-01T00:00:00Z",
                 "active": True
@@ -162,7 +177,7 @@ class AuthManager:
             'username': user.username,
             'role': user.role.value,
             'permissions': user.permissions,
-            'scope': 'read:all write:all' if user.role == UserRole.EXECUTIVE else 'none',
+            'scope': 'read:all write:all' if user.role == UserRole.EXECUTIVE else ('read:advertisements' if user.role.value == 'manager' else 'none'),
             'iat': current_timestamp,
             'exp': expires_timestamp,
             'iss': 'http://localhost:8001',  # Match server expectation

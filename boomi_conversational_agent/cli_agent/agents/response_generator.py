@@ -1,10 +1,22 @@
 """
-ResponseGenerator Agent - Phase 5 TDD Implementation
+ResponseGenerator Agent - Enhanced with MCPAgentState and field_mappings support
 Generates natural language responses from query results
 """
 from typing import Dict, Any, List, Optional
 import json
 import re
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import shared agent state
+try:
+    from shared.agent_state import MCPAgentState
+except ImportError:
+    # Fallback if shared state not available
+    MCPAgentState = None
 
 class ResponseGenerator:
     """

@@ -85,14 +85,28 @@ def main():
     print("   - Role-Based Access Control")
     
     print("\n👥 Demo User Personas:")
-    print("   - Martha Stewart (Executive): read:all scope")
+    print("   - Sarah Chen (Executive): read:all write:all scope")
+    print("   - David Williams (Manager): read:advertisements scope")
     print("   - Alex Smith (Clerk): none scope")
     
-    print("\n🌐 Starting server...")
+    print("\n🌐 Starting OAuth server...")
     
     try:
-        # Import and run the server
-        from boomi_datahub_mcp_server_oauth import app
+        # Import and run the OAuth server
+        from fastapi import FastAPI
+        from oauth_server import oauth_app
+        
+        # Create FastAPI app
+        app = FastAPI(title="OAuth 2.1 Server for MCP Testing")
+        
+        # Mount OAuth endpoints
+        app.mount("/oauth", oauth_app)
+        app.mount("", oauth_app)  # Also mount at root for metadata endpoint
+        
+        @app.get("/health")
+        async def health_check():
+            """Health check endpoint"""
+            return {"status": "healthy", "service": "oauth-server"}
         
         uvicorn.run(
             app,

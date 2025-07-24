@@ -1,5 +1,6 @@
 # Boomi Conversational Agent Requirements
-# Phase 5: CLI Agent Foundation
+# Phase 8B: LangGraph Orchestration with OAuth 2.1
+# Phase 9A: MCP June 2025 Compliance Implementation
 
 # Core dependencies for CLI agent
 anthropic>=0.7.0          # Claude 4.0 integration
@@ -14,14 +15,14 @@ pytest-mock>=3.11.1      # Mocking framework
 pytest-asyncio>=0.21.0   # Async testing support
 
 # MCP and HTTP dependencies
-fastmcp>=0.1.0             # FastMCP framework
+fastmcp>=0.1.0             # FastMCP framework (NOTE: Current implementation NOT MCP June 2025 compliant)
 mcp>=0.1.0                 # Model Context Protocol
 requests>=2.31.0           # HTTP requests (needed by Boomi clients)
-httpx>=0.24.0              # Async HTTP client
+httpx>=0.24.0              # Async HTTP client (required for OAuth + MCP integration)
 aiohttp>=3.8.0             # Additional async HTTP support
 
-# MCP integration (will reference existing implementation)
-# Note: We'll import from ../boomi_datahub_mcp_server/boomi_mcp_server/
+# ⚠️ COMPLIANCE NOTICE: Current MCP server is NOT MCP June 2025 compliant
+# Phase 9A will implement proper JSON-RPC 2.0 MCP endpoints
 
 # Phase 8A: Streamlit Web Interface
 streamlit>=1.28.0           # Web interface framework
@@ -31,3 +32,25 @@ streamlit-chat>=0.1.0       # Enhanced chat components (optional)
 fastapi>=0.104.0            # API framework (for unified server)
 uvicorn>=0.24.0             # ASGI server
 websockets>=11.0.0          # WebSocket support for real-time features
+
+# Phase 8B: LangGraph Integration (COMPLETE)
+langgraph>=0.0.40           # LangGraph workflow orchestration
+langsmith>=0.0.60           # LangSmith tracing and monitoring
+
+# Phase 9A: MCP June 2025 Compliance (IN PROGRESS) 
+# Additional dependencies for proper MCP implementation
+jsonrpc-base>=2.0.0         # JSON-RPC 2.0 protocol support
+jsonrpc-async>=2.0.0        # Async JSON-RPC client/server
+authlib>=1.2.0              # OAuth 2.1 implementation
+cryptography>=41.0.0        # Cryptographic functions for JWT
+PyJWT>=2.8.0                # JWT token handling
+
+# OAuth 2.1 + MCP integration dependencies
+python-multipart>=0.0.6     # Form data parsing for OAuth
+starlette>=0.27.0           # ASGI middleware for authentication
+
+# Additional dependencies for enhanced orchestration
+redis>=5.0.0                # Redis for state persistence
+pybreaker>=2.0.0            # Circuit breaker for fault tolerance
+prometheus-client>=0.20.0   # Prometheus metrics for monitoring
+celery>=5.3.0

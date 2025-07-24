@@ -1,10 +1,22 @@
 """
-QueryBuilder Agent - Phase 5 TDD Implementation
+QueryBuilder Agent - Enhanced with MCPAgentState and field_mappings support
 Builds executable queries from analysis and field mappings
 """
 from typing import Dict, Any, List, Optional
 import copy
 import json
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import shared agent state
+try:
+    from shared.agent_state import MCPAgentState
+except ImportError:
+    # Fallback if shared state not available
+    MCPAgentState = None
 
 class QueryBuilder:
     """
@@ -86,9 +98,9 @@ class QueryBuilder:
         # Get Claude's reasoning about the query structure
         claude_query_analysis = self._analyze_query_with_claude(query_context)
         
-        # Build filters based on Claude's analysis
-        print(f"🔧 Query Builder: Constructing filters based on LLM analysis...")
-        filters = self._build_intelligent_filters(field_mapping, claude_query_analysis)
+        # Build filters based on Claude's analysis using ReAct reasoning
+        print(f"🔧 Query Builder: Constructing filters based on ReAct analysis...")
+        filters = self._build_intelligent_filters(field_mapping, claude_query_analysis, query_context)
         query['filters'] = filters
         print(f"   🎯 Filters created: {len(filters)} filter(s)")
         for i, filter_item in enumerate(filters, 1):
@@ -593,38 +605,139 @@ Respond in JSON format:
         
         return None
     
-    def _build_intelligent_filters(self, field_mapping: Dict[str, Any], claude_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Build filters based on Claude's analysis and field mappings"""
+    def _build_intelligent_filters(self, field_mapping: Dict[str, Any], claude_analysis: Dict[str, Any], query_context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Build filters using ReAct (Reasoning + Acting) approach"""
+        
+        print(f"   🤔 ReAct Query Builder: Starting multi-step reasoning...")
+        
+        # Get query context for reasoning from metadata or analysis
+        original_query = query_context.get('original_query', 'unknown query')
         
         filters = []
         
-        # First, build filters from field mappings (this is crucial!)
-        print(f"   🧠 LLM Decision: Building filters from field mappings")
-        mapping_filters = self._build_filters(field_mapping)
-        filters.extend(mapping_filters)
+        # THOUGHT 1: Analyze the user's intent and query structure
+        print(f"   💭 THOUGHT: Analyzing query structure...")
+        print(f"      Query: '{original_query}'")
+        print(f"      Claude Analysis: {claude_analysis.get('query_type', 'unknown')} query")
+        print(f"      Distinct values requested: {claude_analysis.get('distinct_values_requested', False)}")
+        print(f"      Field mappings: {[(entity, info.get('field_name')) for entity, info in field_mapping.items()]}")
         
-        # Then add any additional filters from Claude's analysis
-        claude_filters = claude_analysis.get('filters', [])
-        if claude_filters:
-            print(f"   🧠 LLM Decision: Adding {len(claude_filters)} additional Claude filters")
-            for claude_filter in claude_filters:
-                filter_item = {
-                    'fieldId': claude_filter.get('field'),
-                    'operator': claude_filter.get('operator', 'EQUALS'),
-                    'value': claude_filter.get('value'),
-                    'confidence': claude_filter.get('confidence', 0.8),
-                    'reasoning': f"LLM Analysis: {claude_filter.get('reasoning', 'Recommended by Claude')}"
-                }
-                filters.append(filter_item)
+        # THOUGHT 2: Determine if entities are filter values or field identifiers
+        print(f"   💭 THOUGHT: Are entities filter values or field identifiers?")
+        entity_analysis = {}
         
-        # Note: Distinct values requests can still have filters!
-        # Example: "What products is Sony advertising?" = Filter by ADVERTISER=Sony, then get distinct PRODUCT values
+        for entity_text, mapping_info in field_mapping.items():
+            field_name = mapping_info.get('field_name')
+            confidence = mapping_info.get('confidence', 0.0)
+            
+            # Reasoning about entity role
+            is_generic_term = self._is_generic_field_identifier(entity_text, original_query)
+            is_specific_value = self._is_specific_filter_value(entity_text, original_query)
+            
+            entity_analysis[entity_text] = {
+                'field_name': field_name,
+                'confidence': confidence,
+                'is_generic_term': is_generic_term,
+                'is_specific_value': is_specific_value,
+                'reasoning': self._explain_entity_role(entity_text, original_query, is_generic_term, is_specific_value)
+            }
+            
+            print(f"      '{entity_text}' → {field_name}")
+            print(f"         Generic term: {is_generic_term}, Specific value: {is_specific_value}")
+            print(f"         Reasoning: {entity_analysis[entity_text]['reasoning']}")
+        
+        # ACTION 1: Decide whether to apply filters or get distinct values
+        print(f"   🎯 ACTION: Determining filter strategy...")
+        
         if claude_analysis.get('distinct_values_requested'):
-            print(f"   🧠 LLM Decision: Will apply {len(filters)} filters, then get distinct values")
+            # For distinct values queries, only use specific filter values, skip generic terms
+            print(f"      Decision: Distinct values query - filtering out generic field identifiers")
+            
+            for entity_text, analysis in entity_analysis.items():
+                if analysis['is_specific_value'] and not analysis['is_generic_term']:
+                    filter_item = {
+                        'fieldId': analysis['field_name'],
+                        'operator': 'EQUALS',
+                        'value': entity_text,
+                        'confidence': analysis['confidence'],
+                        'reasoning': f"ReAct: {analysis['reasoning']}"
+                    }
+                    filters.append(filter_item)
+                    print(f"         ✅ Creating filter: {analysis['field_name']} = '{entity_text}'")
+                else:
+                    print(f"         ⏭️  Skipping '{entity_text}': {analysis['reasoning']}")
         else:
-            print(f"   🧠 LLM Decision: Using {len(filters)} filters for regular query")
+            # For regular queries, use standard field mapping approach
+            print(f"      Decision: Regular query - using field mapping filters")
+            mapping_filters = self._build_filters(field_mapping)
+            filters.extend(mapping_filters)
         
+        # OBSERVATION: Report the final decision
+        print(f"   👁️  OBSERVATION: Created {len(filters)} filters using ReAct reasoning")
+        
+        if claude_analysis.get('distinct_values_requested'):
+            distinct_field = claude_analysis.get('distinct_field', 'unknown')
+            print(f"      Final action: Get distinct values from '{distinct_field}' field with {len(filters)} filters")
+        else:
+            print(f"      Final action: Execute regular query with {len(filters)} filters")
+            
         return filters
+    
+    def _is_generic_field_identifier(self, entity_text: str, original_query: str) -> bool:
+        """Determine if entity is a generic term identifying a field type, not a filter value"""
+        
+        generic_terms = [
+            'companies', 'company', 'organizations', 'organization', 
+            'products', 'product', 'items', 'things',
+            'users', 'user', 'customers', 'customer', 'people',
+            'campaigns', 'campaign', 'advertisements', 'ads', 'ad',
+            'opportunities', 'opportunity', 'deals', 'deal',
+            'records', 'record', 'entries', 'entry', 'data',
+            'advertising', 'marketing', 'promoting'
+        ]
+        
+        # Check if entity is a generic term
+        if entity_text.lower() in generic_terms:
+            return True
+            
+        # Check query patterns that suggest generic usage
+        question_patterns = ['which', 'what', 'list', 'show all', 'get all', 'find all']
+        query_lower = original_query.lower()
+        
+        # If query starts with question words and entity is plural, likely generic
+        if any(pattern in query_lower for pattern in question_patterns) and entity_text.endswith('s'):
+            return True
+            
+        return False
+    
+    def _is_specific_filter_value(self, entity_text: str, original_query: str) -> bool:
+        """Determine if entity is a specific value to filter by"""
+        
+        # Proper nouns (capitalized) are often specific values
+        if entity_text and entity_text[0].isupper() and len(entity_text) > 1:
+            return True
+            
+        # Specific brand names, numbers, dates, etc.
+        if entity_text.lower() in ['sony', 'apple', 'microsoft', 'google', 'amazon', 'meta', 'tesla']:
+            return True
+            
+        # If entity appears in quotes or specific context, likely a filter value
+        if f"'{entity_text}'" in original_query or f'"{entity_text}"' in original_query:
+            return True
+            
+        return False
+    
+    def _explain_entity_role(self, entity_text: str, original_query: str, is_generic: bool, is_specific: bool) -> str:
+        """Explain the reasoning for entity role classification"""
+        
+        if is_generic and not is_specific:
+            return f"Generic field identifier - '{entity_text}' describes what type of data to return"
+        elif is_specific and not is_generic:
+            return f"Specific filter value - '{entity_text}' is a concrete value to filter by"
+        elif is_generic and is_specific:
+            return f"Ambiguous - '{entity_text}' could be generic or specific, treating as generic in question context"
+        else:
+            return f"Uncertain classification - '{entity_text}' doesn't match clear patterns, defaulting to filter value"
     
     def _build_filters_original(self, field_mapping: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Original pattern-based filter building (renamed from _build_filters)"""

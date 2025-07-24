@@ -4,6 +4,8 @@ Claude Client for LLM-powered field mapping and model discovery
 
 import os
 import json
+import time
+import random
 from typing import Dict, List, Any, Optional
 
 class ClaudeClient:
@@ -35,9 +37,36 @@ class ClaudeClient:
         else:
             print("⚠️  No ANTHROPIC_API_KEY found. Claude features will use fallback patterns.")
     
+    def retry_with_backoff(self, func, max_retries=5):
+        """Retry function with exponential backoff for 529 errors"""
+        for attempt in range(max_retries):
+            try:
+                return func()
+            except Exception as e:
+                if "529" in str(e) or "overloaded" in str(e).lower():
+                    if attempt < max_retries - 1:
+                        wait_time = (2 ** attempt) + random.uniform(0, 1)
+                        print(f"⏳ Claude API overloaded, retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                raise e
+    
     def is_available(self) -> bool:
         """Check if Claude client is available"""
         return self._client is not None
+    
+    def generate_response(self, prompt: str, max_tokens: int = 1000) -> str:
+        """
+        Generate response using Claude (alias for query method)
+        
+        Args:
+            prompt: The prompt to send
+            max_tokens: Maximum tokens in response
+            
+        Returns:
+            Claude's response as a string
+        """
+        return self.query(prompt, max_tokens)
     
     def query(self, prompt: str, max_tokens: int = 1000) -> str:
         """
@@ -53,7 +82,7 @@ class ClaudeClient:
         if not self._client:
             raise ValueError("Claude client not available")
         
-        try:
+        def make_request():
             message = self._client.messages.create(
                 model="claude-sonnet-4-20250514",  # Claude 4.0 Sonnet
                 max_tokens=max_tokens,
@@ -61,11 +90,12 @@ class ClaudeClient:
                     {"role": "user", "content": prompt}
                 ]
             )
-            
             return message.content[0].text
-            
+        
+        try:
+            return self.retry_with_backoff(make_request)
         except Exception as e:
-            print(f"❌ Claude API error: {e}")
+            print(f"❌ Claude API error after retries: {e}")
             raise
     
     def map_entities_to_fields(self, entities: List[Dict[str, Any]], 

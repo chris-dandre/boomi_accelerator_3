@@ -48,7 +48,33 @@ class ModelDiscovery:
         if not self.mcp_client:
             raise ValueError("MCP client not configured")
         
-        return self.mcp_client.get_all_models()
+        print("🔍 ModelDiscovery: Calling MCP client get_all_models()")
+        models = self.mcp_client.get_all_models()
+        print(f"🔍 ModelDiscovery: Retrieved {len(models) if isinstance(models, list) else 'non-list'} models")
+        print(f"🔍 ModelDiscovery: Models type: {type(models)}")
+        print(f"🔍 ModelDiscovery: Full response: {models}")
+        
+        if isinstance(models, dict):
+            if 'error' in models:
+                print(f"❌ ModelDiscovery: MCP client returned error: {models}")
+                return []  # Return empty list instead of error dict
+            elif 'models' in models and models.get('status') == 'success':
+                # Handle successful response format: {'status': 'success', 'models': [...]}
+                print("🔍 ModelDiscovery: Extracting from status/models response")
+                actual_models = models['models']
+                print(f"🔍 ModelDiscovery: Found {len(actual_models)} models in response")
+                return actual_models if isinstance(actual_models, list) else []
+            elif 'result' in models:
+                # Handle JSON-RPC response format
+                print("🔍 ModelDiscovery: Extracting from JSON-RPC result")
+                result = models['result']
+                if isinstance(result, dict) and 'models' in result:
+                    actual_models = result['models']
+                    print(f"🔍 ModelDiscovery: Found {len(actual_models)} models in result")
+                    return actual_models if isinstance(actual_models, list) else []
+                return result if isinstance(result, list) else []
+        
+        return models if isinstance(models, list) else []
     
     def find_relevant_models(self, query_analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -143,10 +169,25 @@ class ModelDiscovery:
     def _build_query_context(self, query_analysis: Dict[str, Any]) -> str:
         """Build context string for Claude ranking"""
         intent = query_analysis.get('intent', 'UNKNOWN')
-        entities = query_analysis.get('entities', [])
+        entities = query_analysis.get('entities', {})
         query_type = query_analysis.get('query_type', 'SIMPLE')
         
-        entity_text = ', '.join([e.get('text', '') for e in entities])
+        # Handle the new entities structure (dict with model_names, field_names, filters)
+        if isinstance(entities, dict):
+            entity_parts = []
+            if entities.get('model_names'):
+                entity_parts.append(f"Models: {', '.join(entities['model_names'])}")
+            if entities.get('field_names'):
+                entity_parts.append(f"Fields: {', '.join(entities['field_names'])}")
+            if entities.get('filters'):
+                filter_texts = [f"{f.get('field', '')} {f.get('operator', '')} {f.get('value', '')}" 
+                              for f in entities['filters'] if isinstance(f, dict)]
+                if filter_texts:
+                    entity_parts.append(f"Filters: {', '.join(filter_texts)}")
+            entity_text = '; '.join(entity_parts)
+        else:
+            # Fallback for old list format
+            entity_text = ', '.join([e.get('text', '') if isinstance(e, dict) else str(e) for e in entities])
         
         return f"Intent: {intent}, Entities: [{entity_text}], Type: {query_type}"
     

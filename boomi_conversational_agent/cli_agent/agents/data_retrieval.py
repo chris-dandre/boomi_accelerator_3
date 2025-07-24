@@ -1,5 +1,5 @@
 """
-DataRetrieval Agent - Phase 5 TDD Implementation
+DataRetrieval Agent - Enhanced with MCPAgentState and field_mappings support
 Executes queries against Boomi DataHub and retrieves data
 """
 from typing import Dict, Any, List, Optional
@@ -7,6 +7,18 @@ import time
 import hashlib
 import json
 import copy
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import shared agent state
+try:
+    from shared.agent_state import MCPAgentState
+except ImportError:
+    # Fallback if shared state not available
+    MCPAgentState = None
 
 class DataRetrieval:
     """

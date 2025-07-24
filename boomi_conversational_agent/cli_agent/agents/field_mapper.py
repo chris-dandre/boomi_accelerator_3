@@ -1,9 +1,21 @@
 """
-FieldMapper Agent - Phase 5 TDD Implementation
+FieldMapper Agent - Enhanced with MCPAgentState and field_mappings support
 Maps entities to model fields using LLM reasoning
 """
 from typing import Dict, Any, List, Optional
 import json
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import shared agent state
+try:
+    from shared.agent_state import MCPAgentState
+except ImportError:
+    # Fallback if shared state not available
+    MCPAgentState = None
 
 class FieldMapper:
     """
@@ -82,26 +94,29 @@ class FieldMapper:
             return []
     
     
+
     def map_entities_to_fields(self, entities: List[Dict[str, Any]], 
                              model_fields: List[Dict[str, Any]], 
-                             query_context: str = "") -> Dict[str, Any]:
+                             query_context: str = "", 
+                             model_id: str = None) -> Dict[str, Any]:
         """
-        Map entities to model fields using Claude LLM
+        Map entities to model fields using Claude LLM semantic analysis
         
         Args:
             entities: List of entities from query analysis
             model_fields: List of available model fields
             query_context: Original query for context
+            model_id: Model ID (not used but kept for compatibility)
             
         Returns:
             Dictionary mapping entity text to field information
         """
+        # Primary Strategy: Claude LLM field mapping (semantic understanding)
         if not self.claude_client:
-            # Fallback: Use pattern-based field mapping when Claude not available
+            print(f"⚠️  No Claude client available, using pattern fallback")
             return self._fallback_pattern_field_mapping(entities, model_fields)
         
         try:
-            # Use Claude's intelligent field mapping with query context
             print(f"🧠 Claude Field Mapping: Analyzing semantic relationships...")
             print(f"   Entities to map: {[e.get('text', '') for e in entities]}")
             print(f"   Available fields: {[f.get('name', '') for f in model_fields]}")
@@ -173,8 +188,8 @@ class FieldMapper:
             
             print(f"🔍 Debug - Extracted fields_list: {len(fields_list) if isinstance(fields_list, list) else 'Not a list'} items")
             
-            # Map entities to fields for this model with query context
-            field_mapping = self.map_entities_to_fields(entities, fields_list, query_context)
+            # Map entities to fields for this model with query context and data-driven discovery
+            field_mapping = self.map_entities_to_fields(entities, fields_list, query_context, model_id)
             
             complete_mapping[model_id] = field_mapping
         
@@ -270,10 +285,14 @@ Only include mappings with confidence > 0.6. Focus on the most relevant mappings
             mapped_field = None
             confidence = 0.0
             
-            # Brand entities -> brand_name field
-            if entity_type == 'BRAND' and 'brand_name' in field_names:
-                mapped_field = 'brand_name'
-                confidence = 0.9
+            # Brand entities -> ADVERTISER field (for Advertisements model) or brand_name field  
+            if entity_type == 'BRAND':
+                if 'ADVERTISER' in field_names:
+                    mapped_field = 'ADVERTISER'
+                    confidence = 0.95
+                elif 'brand_name' in field_names:
+                    mapped_field = 'brand_name'
+                    confidence = 0.9
             
             # Product entities -> product_name field
             elif entity_type == 'OBJECT' and entity_text.lower() in ['products', 'product']:

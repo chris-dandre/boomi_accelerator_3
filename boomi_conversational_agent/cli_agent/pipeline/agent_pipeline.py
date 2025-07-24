@@ -1,20 +1,24 @@
 """
-AgentPipeline - Phase 5 TDD Implementation
-Orchestrates all agents in sequential pipeline for query processing
+Agent Pipeline for processing queries in the Boomi DataHub Conversational Agent
+Phase 8B: Enhanced with field_mappings support, environment variable management, and resource cleanup
 """
-from typing import Dict, Any, List, Optional
+
+import os
+from dotenv import load_dotenv
 import time
 import hashlib
 import json
 import copy
-
-# Import all agents
+from typing import Dict, Any, List, Optional
+from shared.agent_state import MCPAgentState
 from cli_agent.agents.query_analyzer import QueryAnalyzer
 from cli_agent.agents.model_discovery import ModelDiscovery
 from cli_agent.agents.field_mapper import FieldMapper
 from cli_agent.agents.query_builder import QueryBuilder
 from cli_agent.agents.data_retrieval import DataRetrieval
 from cli_agent.agents.response_generator import ResponseGenerator
+
+load_dotenv()
 
 class AgentPipeline:
     """
@@ -35,27 +39,22 @@ class AgentPipeline:
         
         # Initialize all agents with shared clients
         self.query_analyzer = QueryAnalyzer(claude_client=claude_client)
-        
         self.model_discovery = ModelDiscovery(
             mcp_client=mcp_client,
             claude_client=claude_client
         )
-        
         self.field_mapper = FieldMapper(
             mcp_client=mcp_client,
             claude_client=claude_client
         )
-        
         self.query_builder = QueryBuilder(
             mcp_client=mcp_client,
             claude_client=claude_client
         )
-        
         self.data_retrieval = DataRetrieval(
             mcp_client=mcp_client,
             claude_client=claude_client
         )
-        
         self.response_generator = ResponseGenerator(
             mcp_client=mcp_client,
             claude_client=claude_client
@@ -68,7 +67,7 @@ class AgentPipeline:
         self.version = "1.0.0"
         self.pipeline_stages = [
             'query_analysis',
-            'model_discovery', 
+            'model_discovery',
             'field_mapping',
             'query_building',
             'data_retrieval',
@@ -82,13 +81,35 @@ class AgentPipeline:
         
         Args:
             user_query: Natural language query from user
-            user_context: Optional user context for personalization
+            user_context: Optional user context with query_intent and field_mappings
             enable_cache: Whether to enable pipeline caching
             
         Returns:
             Complete pipeline result with response and metadata
         """
         pipeline_start_time = time.time()
+        
+        # Initialize MCPAgentState
+        state = MCPAgentState(
+            user_query=user_query,
+            user_context=user_context or {},
+            query_intent=user_context.get("query_intent", "UNKNOWN") if user_context else "UNKNOWN",
+            field_mappings=user_context.get("field_mappings", {}) if user_context else {},
+            entities={},
+            built_query={},
+            query_results={},
+            response={},
+            error_state=None,
+            audit_trail=[],
+            token_validated=False,
+            user_role=user_context.get("role", "unknown") if user_context else "unknown",
+            access_permissions=user_context.get("permissions", []) if user_context else [],
+            security_clearance="pending",
+            discovered_models=[],
+            proactive_insights=[],
+            suggested_follow_ups=[],
+            processing_start_time=pipeline_start_time
+        )
         
         # Check cache if enabled
         if enable_cache:
@@ -103,6 +124,8 @@ class AgentPipeline:
         pipeline_result = {
             'success': False,
             'response': {},
+            'query_intent': state["query_intent"],
+            'field_mappings': state["field_mappings"],
             'pipeline_metadata': {
                 'user_context': user_context,
                 'cache_enabled': enable_cache,
@@ -120,9 +143,18 @@ class AgentPipeline:
                 
                 if isinstance(raw_models, dict):
                     if 'models' in raw_models:
-                        available_models = raw_models['models']
+                        models_data = raw_models['models']
+                        if isinstance(models_data, dict) and 'data' in models_data:
+                            available_models = []
+                            if 'published' in models_data['data']:
+                                available_models.extend(models_data['data']['published'])
+                            if 'draft' in models_data['data']:
+                                available_models.extend(models_data['data']['draft'])
+                        elif isinstance(models_data, list):
+                            available_models = models_data
+                        else:
+                            available_models = []
                     elif 'data' in raw_models and isinstance(raw_models['data'], dict):
-                        # Handle MCP response structure: data.published + data.draft
                         available_models = []
                         if 'published' in raw_models['data']:
                             available_models.extend(raw_models['data']['published'])
@@ -134,37 +166,38 @@ class AgentPipeline:
                     available_models = raw_models
                 else:
                     available_models = []
-                    
+                state["discovered_models"] = available_models
                 print(f"🔍 Debug - Processed models: {available_models[:2] if available_models else 'None'}")
             except Exception as e:
-                print(f"⚠️  Model discovery failed: {e}")
-                available_models = []  # Continue with empty list if model discovery fails
+                print(f"⚠️ Model discovery failed: {e}")
+                available_models = []
+                state["discovered_models"] = []
             
             # Stage 1: Query Analysis
             stage_start = time.time()
             try:
                 query_analysis = self.query_analyzer.analyze(user_query, available_models)
+                state["query_intent"] = query_analysis.get('intent', 'UNKNOWN')
+                state["entities"] = query_analysis.get('entities', [])
                 stage_metadata = {
                     'success': True,
                     'execution_time_ms': (time.time() - stage_start) * 1000,
-                    'intent': query_analysis.get('intent'),
-                    'entities': query_analysis.get('entities', []),
+                    'intent': state["query_intent"],
+                    'entities': state["entities"],
                     'query_type': query_analysis.get('query_type'),
                     'suggested_models': query_analysis.get('suggested_models', [])
                 }
                 pipeline_result['pipeline_metadata']['query_analysis'] = stage_metadata
+                pipeline_result['query_intent'] = state["query_intent"]
                 
-                # Early exit for invalid queries
-                if query_analysis.get('intent') == 'UNKNOWN':
+                if state["query_intent"] == 'UNKNOWN':
                     return self._handle_pipeline_error("Unable to understand the query", pipeline_result, pipeline_start_time)
-                    
             except Exception as e:
                 return self._handle_stage_error('query_analysis', str(e), pipeline_result, pipeline_start_time)
             
             # Stage 2: Model Discovery
             stage_start = time.time()
             try:
-                # Check if this is a meta-query about system structure
                 is_meta_query = query_analysis.get('is_meta_query', False)
                 suggested_models = query_analysis.get('suggested_models', [])
                 
@@ -174,25 +207,25 @@ class AgentPipeline:
                 
                 elif suggested_models:
                     print(f"🎯 Using Claude-suggested models: {suggested_models}")
-                    # Filter available models to match suggestions
                     relevant_models = []
                     for model in available_models:
                         if isinstance(model, dict) and model.get('name') in suggested_models:
-                            # Create a copy and add metadata
                             model_copy = model.copy()
                             model_copy['relevance_score'] = 0.95
                             model_copy['role'] = 'primary'
-                            model_copy['model_id'] = model.get('id', '')  # Ensure model_id field exists
+                            model_copy['model_id'] = model.get('id', '')
                             relevant_models.append(model_copy)
                     
                     if not relevant_models:
-                        print("⚠️  Suggested models not found, falling back to discovery")
+                        print("⚠️ Suggested models not found, falling back to discovery")
                         relevant_models = self.model_discovery.find_relevant_models(query_analysis)
                 else:
                     relevant_models = self.model_discovery.find_relevant_models(query_analysis)
+                
                 if not relevant_models:
                     return self._handle_pipeline_error("No relevant data models found", pipeline_result, pipeline_start_time)
                 
+                state["discovered_models"] = relevant_models
                 primary_model = relevant_models[0]['model_id']
                 stage_metadata = {
                     'success': True,
@@ -202,22 +235,24 @@ class AgentPipeline:
                     'model_count': len(relevant_models)
                 }
                 pipeline_result['pipeline_metadata']['model_discovery'] = stage_metadata
-                
             except Exception as e:
                 return self._handle_stage_error('model_discovery', str(e), pipeline_result, pipeline_start_time)
             
             # Stage 3: Field Mapping
             stage_start = time.time()
             try:
+                # Merge provided field_mappings with new mappings
+                existing_mappings = state["field_mappings"]
                 field_mapping = self.field_mapper.create_field_mapping_for_models(
                     query_analysis.get('entities', []),
                     relevant_models,
-                    user_query  # Pass the original query for context
+                    user_query
                 )
-                
-                # Get field mapping for primary model
                 primary_field_mapping = field_mapping.get(primary_model, {})
-                
+                state["field_mappings"] = {
+                    **existing_mappings,
+                    **{field: field.upper() for field in primary_field_mapping.keys()}
+                }
                 stage_metadata = {
                     'success': True,
                     'execution_time_ms': (time.time() - stage_start) * 1000,
@@ -226,7 +261,7 @@ class AgentPipeline:
                     'models_mapped': list(field_mapping.keys())
                 }
                 pipeline_result['pipeline_metadata']['field_mapping'] = stage_metadata
-                
+                pipeline_result['field_mappings'] = state["field_mappings"]
             except Exception as e:
                 return self._handle_stage_error('field_mapping', str(e), pipeline_result, pipeline_start_time)
             
@@ -238,14 +273,10 @@ class AgentPipeline:
                     primary_field_mapping,
                     primary_model
                 )
-                
-                # Optimize query
                 optimized_query = self.query_builder.optimize_query(executable_query)
-                
-                # Enable caching if requested
                 if enable_cache:
                     optimized_query['cache_enabled'] = True
-                
+                state["built_query"] = optimized_query
                 stage_metadata = {
                     'success': True,
                     'execution_time_ms': (time.time() - stage_start) * 1000,
@@ -254,7 +285,6 @@ class AgentPipeline:
                     'optimization_applied': True
                 }
                 pipeline_result['pipeline_metadata']['query_building'] = stage_metadata
-                
             except Exception as e:
                 return self._handle_stage_error('query_building', str(e), pipeline_result, pipeline_start_time)
             
@@ -262,11 +292,9 @@ class AgentPipeline:
             stage_start = time.time()
             try:
                 query_result = self.data_retrieval.execute_query(optimized_query)
-                
-                # Handle query execution errors
                 if 'error' in query_result:
                     return self._handle_pipeline_error(f"Data retrieval failed: {query_result['error']}", pipeline_result, pipeline_start_time)
-                
+                state["query_results"] = query_result
                 stage_metadata = {
                     'success': True,
                     'execution_time_ms': (time.time() - stage_start) * 1000,
@@ -275,7 +303,6 @@ class AgentPipeline:
                     'data_source': primary_model
                 }
                 pipeline_result['pipeline_metadata']['data_retrieval'] = stage_metadata
-                
             except Exception as e:
                 return self._handle_stage_error('data_retrieval', str(e), pipeline_result, pipeline_start_time)
             
@@ -287,7 +314,7 @@ class AgentPipeline:
                     query_result,
                     user_context=user_context
                 )
-                
+                state["response"] = final_response
                 stage_metadata = {
                     'success': True,
                     'execution_time_ms': (time.time() - stage_start) * 1000,
@@ -296,7 +323,6 @@ class AgentPipeline:
                     'message_length': len(final_response.get('message', ''))
                 }
                 pipeline_result['pipeline_metadata']['response_generation'] = stage_metadata
-                
             except Exception as e:
                 return self._handle_stage_error('response_generation', str(e), pipeline_result, pipeline_start_time)
             
@@ -304,7 +330,10 @@ class AgentPipeline:
             total_execution_time = (time.time() - pipeline_start_time) * 1000
             pipeline_result.update({
                 'success': True,
-                'response': final_response,
+                'response': state["response"],
+                'query_intent': state["query_intent"],
+                'field_mappings': state["field_mappings"],
+                'query_results': state["query_results"]
             })
             pipeline_result['pipeline_metadata']['total_execution_time_ms'] = total_execution_time
             
@@ -655,3 +684,10 @@ Format it as a clear, structured response with appropriate headers and formattin
         
         cache_string = json.dumps(cache_data, sort_keys=True)
         return hashlib.md5(cache_string.encode()).hexdigest()
+    
+    def close(self):
+        """Clean up pipeline resources"""
+        if self.mcp_client and hasattr(self.mcp_client, 'close'):
+            self.mcp_client.close()
+        self.pipeline_cache.clear()
+        print("✅ AgentPipeline resources cleaned up")

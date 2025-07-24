@@ -1,9 +1,21 @@
 """
-QueryAnalyzer Agent - Phase 5 TDD Implementation
-Minimal implementation to pass initial tests
+QueryAnalyzer Agent - Enhanced with MCPAgentState and field_mappings support
+Phase 8B+ implementation with load_dotenv integration
 """
 from typing import Dict, Any, List
 import re
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import shared agent state
+try:
+    from shared.agent_state import MCPAgentState
+except ImportError:
+    # Fallback if shared state not available
+    MCPAgentState = None
 
 class QueryAnalyzer:
     """
@@ -200,7 +212,11 @@ class QueryAnalyzer:
     def _claude_semantic_analysis(self, user_query: str, available_models: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Use Claude for intelligent query analysis"""
         print("💭 Claude Processing: Semantic query analysis...")
-        print(f"   Debug - Models structure: {available_models[:2]}")  # Show first 2 models
+        # Safe debug print for models structure
+        if isinstance(available_models, list):
+            print(f"   Debug - Models structure: {available_models[:2]}")  # Show first 2 models
+        else:
+            print(f"   Debug - Models structure: {type(available_models)} - {available_models}")
         
         # Build model context for Claude
         model_descriptions = []
