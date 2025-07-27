@@ -676,15 +676,23 @@ Respond in JSON format:
                 print(f"         Claude identified {len(claude_filters)} filters needed")
                 # Convert Claude's filter format to our format
                 for claude_filter in claude_filters:
+                    # Handle IS_NOT_NULL operator which doesn't need a value parameter
+                    operator = claude_filter.get('operator', 'EQUALS')
                     filter_item = {
                         'fieldId': claude_filter.get('field', 'unknown'),
-                        'operator': claude_filter.get('operator', 'EQUALS'),
-                        'value': claude_filter.get('value', ''),
+                        'operator': operator,
                         'confidence': 0.95,
                         'reasoning': f"Claude LLM: {claude_filter.get('reasoning', 'Filter recommended by Claude')}"
                     }
+                    
+                    # Only add value parameter for operators that need it
+                    if operator not in ['IS_NOT_NULL', 'IS_NULL']:
+                        filter_item['value'] = claude_filter.get('value', '')
                     filters.append(filter_item)
-                    print(f"         ✅ Added Claude filter: {filter_item['fieldId']} {filter_item['operator']} '{filter_item['value']}'")
+                    if 'value' in filter_item:
+                        print(f"         ✅ Added Claude filter: {filter_item['fieldId']} {filter_item['operator']} '{filter_item['value']}'")
+                    else:
+                        print(f"         ✅ Added Claude filter: {filter_item['fieldId']} {filter_item['operator']}")
             else:
                 print(f"         Claude determined NO FILTERS needed - query should return all records")
                 print(f"         Reason: {claude_analysis.get('reasoning', 'No specific reasoning provided')}")
