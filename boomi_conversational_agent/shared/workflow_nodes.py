@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import httpx
 from shared.agent_state import MCPAgentState, AuthStatus, SecurityClearance, StateManager, QueryIntent
 from security.hybrid_semantic_analyzer import HybridSemanticAnalyzer, SemanticThreatType
+from security.audit_logger import audit_logger, AuditEvent, AuditEventType, AuditSeverity
 from cli_agent.agents.model_discovery import ModelDiscovery
 
 load_dotenv()
@@ -32,6 +33,14 @@ class WorkflowNodes:
         bearer_token = state["bearer_token"]
         
         if not bearer_token:
+            # Log missing token
+            await audit_logger.log_event(AuditEvent(
+                event_type=AuditEventType.INVALID_TOKEN,
+                severity=AuditSeverity.WARNING,
+                user_id=state.get("user_context", {}).get("username", "anonymous"),
+                details={"reason": "missing_bearer_token"}
+            ))
+            
             state = self.state_manager.update_auth_status(
                 state, AuthStatus.TOKEN_INVALID
             )
@@ -47,20 +56,43 @@ class WorkflowNodes:
                 if response.status_code == 200:
                     token_info = response.json()
                     if token_info.get('active', False):
+                        username = token_info.get("username", "unknown")
+                        
+                        # Log successful token validation
+                        await audit_logger.log_event(AuditEvent(
+                            event_type=AuditEventType.TOKEN_EXCHANGE,
+                            severity=AuditSeverity.INFO,
+                            user_id=username,
+                            success=True,
+                            details={
+                                "token_type": "bearer",
+                                "user_role": token_info.get("role", "unknown"),
+                                "permissions": token_info.get("permissions", []),
+                                "has_data_access": token_info.get("has_data_access", False)
+                            }
+                        ))
+                        
                         state = self.state_manager.update_auth_status(
                             state, AuthStatus.AUTHENTICATED, token_info
                         )
                         state["token_validated"] = True
                         state["user_context"].update({
-                            "username": token_info.get("username", "unknown"),
+                            "username": username,
                             "role": token_info.get("role", "unknown"),
                             "permissions": token_info.get("permissions", []),
                             "has_data_access": token_info.get("has_data_access", False)
                         })
                         state["user_role"] = token_info.get("role", "unknown")
                         state["access_permissions"] = token_info.get("permissions", [])
-                        print(f"✅ Token validated via introspection for user: {token_info.get('username', 'unknown')}")
+                        print(f"✅ Token validated via introspection for user: {username}")
                     else:
+                        # Log invalid token
+                        await audit_logger.log_event(AuditEvent(
+                            event_type=AuditEventType.INVALID_TOKEN,
+                            severity=AuditSeverity.WARNING,
+                            details={"reason": "token_not_active"}
+                        ))
+                        
                         state = self.state_manager.update_auth_status(
                             state, AuthStatus.TOKEN_INVALID
                         )
@@ -306,12 +338,32 @@ Provide comprehensive analysis covering all security layers in a single response
             
             # Check for threats and show actual LLM reasoning
             if threat_analysis.get("threat_detected", False) and final_decision.get("action") in ["BLOCK_IMMEDIATELY", "QUARANTINE"]:
+                threat_type = threat_analysis.get('threat_type', 'UNKNOWN')
+                threat_reasoning = threat_analysis.get("reasoning", "Advanced threat patterns detected")
+                
+                # Log security threat detection
+                await audit_logger.log_event(AuditEvent(
+                    event_type=AuditEventType.JAILBREAK_ATTEMPT if 'jailbreak' in threat_type.lower() or 'injection' in threat_type.lower() else AuditEventType.SUSPICIOUS_ACTIVITY,
+                    severity=AuditSeverity.CRITICAL,
+                    user_id=state.get("user_context", {}).get("username", "anonymous"),
+                    success=False,
+                    details={
+                        "threat_type": threat_type,
+                        "threat_confidence": threat_analysis.get("confidence_score", 0.0),
+                        "threat_reasoning": threat_reasoning,
+                        "query_snippet": state["user_query"][:200],  # First 200 chars for context
+                        "user_role": state.get("user_role", "unknown"),
+                        "action_taken": final_decision.get("action", "BLOCKED"),
+                        "threat_indicators": threat_analysis.get("threat_indicators", [])
+                    },
+                    security_flags=["threat_detected", "query_blocked", threat_type.lower()]
+                ))
+                
                 state = self.state_manager.update_security_clearance(
                     state, SecurityClearance.BLOCKED,
-                    {"reason": f"Threat detected: {threat_analysis.get('threat_type', 'UNKNOWN')}"}
+                    {"reason": f"Threat detected: {threat_type}"}
                 )
-                print(f"❌ Security Layer 2 Analysis: Threat detected - {threat_analysis.get('threat_type', 'UNKNOWN')}")
-                threat_reasoning = threat_analysis.get("reasoning", "Advanced threat patterns detected")
+                print(f"❌ Security Layer 2 Analysis: Threat detected - {threat_type}")
                 print(f"   🧠 LLM Reasoning: {threat_reasoning}")
                 
                 # Generate graceful security response for VP demo
@@ -388,6 +440,23 @@ Provide comprehensive analysis covering all security layers in a single response
             if decision_action == "APPROVE":
                 clearance = SecurityClearance.APPROVED
                 print("✅ Security clearance: APPROVED - All security layers passed")
+                
+                # Log successful security analysis
+                await audit_logger.log_event(AuditEvent(
+                    event_type=AuditEventType.API_SUCCESS,
+                    severity=AuditSeverity.INFO,
+                    user_id=state.get("user_context", {}).get("username", "anonymous"),
+                    success=True,
+                    details={
+                        "security_layers_passed": 4,
+                        "query_intent": state.get("query_intent", "UNKNOWN"),
+                        "entity_count": len(entity_extraction.get("field_names", [])) + len(entity_extraction.get("model_names", [])),
+                        "threat_confidence": threat_analysis.get("confidence_score", 0.0),
+                        "business_context_approved": business_context.get("is_appropriate_for_role", True),
+                        "final_reasoning": final_decision.get("reasoning", "All security checks passed"),
+                        "user_role": state.get("user_role", "unknown")
+                    }
+                ))
             elif decision_action == "QUARANTINE":
                 clearance = SecurityClearance.LAYER3_PASSED
                 print("⚠️ Security clearance: QUARANTINE - Requires additional review")

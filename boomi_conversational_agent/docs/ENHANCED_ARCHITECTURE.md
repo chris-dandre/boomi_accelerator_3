@@ -1060,3 +1060,116 @@ def track_metrics(user_role: str, success: bool, duration: float, blocked: bool 
 ```
 
 This enhanced architecture provides a comprehensive foundation for the Phase 8B implementation, combining sophisticated orchestration, robust security, and excellent user experience while maintaining full MCP compliance.
+
+---
+
+## 🚀 PROPOSED FUTURE ENHANCEMENTS
+
+### **Natural Language Processing Enhancement (Phase 9A)**
+
+**Current Issue**: Entity extraction relies on Claude LLM prompting rather than proper NLP techniques.
+
+**Example Problem**: 
+- Query: "provide descriptions of products advertised by Sony"
+- Current: Only extracts ["Sony", "products"] 
+- Missing: "descriptions" as a FIELD_INDICATOR entity
+
+**Proposed Solution**: Replace prompt-based extraction with proper NLP pipeline:
+
+```python
+import spacy
+from spacy import displacy
+
+class ProperNLPEntityExtractor:
+    """Linguistically sound entity extraction using spaCy"""
+    
+    def __init__(self):
+        self.nlp = spacy.load("en_core_web_sm")
+        
+    def extract_entities(self, query: str) -> Dict[str, Any]:
+        """Extract entities using proper NLP techniques"""
+        doc = self.nlp(query)
+        
+        return {
+            # Named Entity Recognition (Organizations, People, etc.)
+            "named_entities": [(ent.text, ent.label_) for ent in doc.ents],
+            
+            # Noun phrases (captures "descriptions", "names", "titles")
+            "noun_phrases": [chunk.text for chunk in doc.noun_chunks],
+            
+            # Dependency parsing (understand semantic relationships)
+            "field_indicators": [
+                token.text for token in doc 
+                if token.dep_ == "dobj" and token.pos_ == "NOUN"
+            ],
+            
+            # Part-of-speech analysis
+            "objects": [token.text for token in doc if token.pos_ == "NOUN"],
+            "verbs": [token.text for token in doc if token.pos_ == "VERB"]
+        }
+```
+
+**Benefits**:
+- ✅ **Linguistically accurate** - Uses real NLP techniques (NER, POS tagging, dependency parsing)
+- ✅ **No prompt engineering** - No need to craft examples or maintain prompts
+- ✅ **Consistent results** - Same input always produces same output
+- ✅ **Domain adaptable** - Can train custom models for business terminology
+- ✅ **Faster processing** - Local analysis, no API calls to Claude
+- ✅ **Better entity coverage** - Captures field indicators like "descriptions", "names", "titles"
+
+**Implementation Effort**: ~2-3 hours to replace Claude prompting with spaCy-based extraction.
+
+**Priority**: Medium (after Phase 8B completion)
+
+### **Intelligent Field Display Limiting (Phase 9B)**
+
+**Current Issue**: Queries can return many fields, creating unwieldy wide tables that are hard to read on terminals and mobile devices.
+
+**Example Problem**: 
+- Query returning 6+ fields creates tables wider than terminal width
+- Information overload makes it difficult to scan key data
+- Poor mobile/narrow screen experience
+
+**Proposed Solution**: Implement intelligent field limiting with smart prioritization:
+
+```python
+class IntelligentFieldLimiter:
+    """Smart field limiting with priority-based selection"""
+    
+    FIELD_PRIORITY = {
+        'advertising_queries': ['ADVERTISER', 'PRODUCT', 'TARGET_MARKET_BRIEF'],
+        'user_queries': ['FIRSTNAME', 'LASTNAME', 'EMAIL', 'USERID'],
+        'opportunity_queries': ['opportunity_name', 'amount', 'stage', 'close_date']
+    }
+    
+    DISPLAY_LIMITS = {
+        'cli': 3,
+        'web': 5,
+        'mobile': 2
+    }
+    
+    def get_display_fields(self, all_fields: List[str], query_context: str, 
+                         interface: str = 'cli') -> Tuple[List[str], str]:
+        """Get priority fields with overflow indication"""
+        max_fields = self.DISPLAY_LIMITS[interface]
+        priority_fields = self._prioritize_fields(all_fields, query_context)
+        display_fields = priority_fields[:max_fields]
+        
+        overflow_msg = ""
+        if len(priority_fields) > max_fields:
+            hidden_count = len(priority_fields) - max_fields
+            overflow_msg = f"💡 {hidden_count} additional fields available"
+        
+        return display_fields, overflow_msg
+```
+
+**Benefits**:
+- ✅ **Better readability** - Tables fit terminal/screen width
+- ✅ **Executive focus** - Shows most important data first  
+- ✅ **Cross-platform compatibility** - Works on narrow terminals and mobile
+- ✅ **User guidance** - Clear indication when more data is available
+- ✅ **Context-aware** - Prioritizes fields based on query type
+
+**Implementation Effort**: ~1-2 hours to add smart field prioritization and overflow handling.
+
+**Priority**: Low (user experience enhancement)

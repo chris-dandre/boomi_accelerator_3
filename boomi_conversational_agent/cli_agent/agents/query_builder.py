@@ -667,10 +667,28 @@ Respond in JSON format:
                 else:
                     print(f"         ⏭️  Skipping '{entity_text}': {analysis['reasoning']}")
         else:
-            # For regular queries, use standard field mapping approach
-            print(f"      Decision: Regular query - using field mapping filters")
-            mapping_filters = self._build_filters(field_mapping)
-            filters.extend(mapping_filters)
+            # For regular queries, trust Claude's analysis of what filters are needed
+            print(f"      Decision: Regular query - trusting Claude LLM analysis")
+            
+            # Check if Claude determined filters are needed
+            claude_filters = claude_analysis.get('filters', [])
+            if claude_filters:
+                print(f"         Claude identified {len(claude_filters)} filters needed")
+                # Convert Claude's filter format to our format
+                for claude_filter in claude_filters:
+                    filter_item = {
+                        'fieldId': claude_filter.get('field', 'unknown'),
+                        'operator': claude_filter.get('operator', 'EQUALS'),
+                        'value': claude_filter.get('value', ''),
+                        'confidence': 0.95,
+                        'reasoning': f"Claude LLM: {claude_filter.get('reasoning', 'Filter recommended by Claude')}"
+                    }
+                    filters.append(filter_item)
+                    print(f"         ✅ Added Claude filter: {filter_item['fieldId']} {filter_item['operator']} '{filter_item['value']}'")
+            else:
+                print(f"         Claude determined NO FILTERS needed - query should return all records")
+                print(f"         Reason: {claude_analysis.get('reasoning', 'No specific reasoning provided')}")
+                # No filters - trust Claude's analysis that this should select all records
         
         # OBSERVATION: Report the final decision
         print(f"   👁️  OBSERVATION: Created {len(filters)} filters using ReAct reasoning")

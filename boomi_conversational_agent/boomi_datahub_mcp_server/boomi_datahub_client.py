@@ -1,18 +1,21 @@
-# boomi_datahub_client_fixed.py
 """
-Fixed version of the Boomi DataHub client with improved XML parsing and error handling
+Boomi DataHub Client for Phase 6A
+OAuth 2.1 compliant client for interacting with Boomi DataHub API
 """
 
 import os
+from dotenv import load_dotenv
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 import requests
 import json
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass
-from dotenv import load_dotenv
 import base64
 import logging
 from datetime import datetime
+import jwt
+from fastapi import HTTPException
+from shared.shared_config import JWT_SECRET_KEY, JWT_ALGORITHM, USER_SCOPES
 
 # Load environment variables
 load_dotenv()
@@ -30,10 +33,6 @@ class BoomiCredentials:
     password: str
     account_id: str
     base_url: str
-    
-    # Optional separate credentials for DataHub queries
-    datahub_username: Optional[str] = None
-    datahub_password: Optional[str] = None
 
 class BoomiDataHubClient:
     """
@@ -49,6 +48,9 @@ class BoomiDataHubClient:
         """
         if credentials:
             self.credentials = credentials
+            # For passed credentials, use same for DataHub (unless env vars override)
+            self.datahub_username = os.getenv('BOOMI_DATAHUB_USERNAME', credentials.username)
+            self.datahub_password = os.getenv('BOOMI_DATAHUB_PASSWORD', credentials.password)
         else:
             self.credentials = self._load_credentials_from_env()
         
@@ -62,42 +64,21 @@ class BoomiDataHubClient:
         account_id = os.getenv('BOOMI_ACCOUNT_ID')
         base_url = os.getenv('BOOMI_BASE_URL', 'https://api.boomi.com')
         
-        # Load separate DataHub credentials if available
-        datahub_username = os.getenv('BOOMI_DATAHUB_USERNAME')
-        datahub_password = os.getenv('BOOMI_DATAHUB_PASSWORD')
-        
         if not all([username, password, account_id]):
             raise ValueError("Missing required Boomi credentials in environment variables: BOOMI_USERNAME, BOOMI_PASSWORD, BOOMI_ACCOUNT_ID")
+        
+        # Store DataHub-specific credentials for record queries
+        self.datahub_username = os.getenv('BOOMI_DATAHUB_USERNAME', username)
+        self.datahub_password = os.getenv('BOOMI_DATAHUB_PASSWORD', password)
+        
+        logger.info(f"🔧 Loaded credentials - Regular API: {username}, DataHub: {self.datahub_username}")
         
         return BoomiCredentials(
             username=username, 
             password=password, 
             account_id=account_id, 
-            base_url=base_url,
-            datahub_username=datahub_username,
-            datahub_password=datahub_password
+            base_url=base_url
         )
-    
-    def set_datahub_credentials(self, username: str, password: str):
-        """
-        Set separate credentials for DataHub record queries
-        
-        Args:
-            username: DataHub username
-            password: DataHub password
-        """
-        self.credentials.datahub_username = username
-        self.credentials.datahub_password = password
-        logger.info("🔑 DataHub credentials updated")
-    
-    def has_datahub_credentials(self) -> bool:
-        """
-        Check if separate DataHub credentials are configured
-        
-        Returns:
-            True if DataHub credentials are set, False otherwise
-        """
-        return bool(self.credentials.datahub_username and self.credentials.datahub_password)
     
     def _setup_authentication(self):
         """Setup authentication for API requests"""
@@ -347,8 +328,7 @@ class BoomiDataHubClient:
             'status_code': None,
             'url': None,
             'response_content': None,
-            'account_id': self.credentials.account_id,
-            'has_datahub_credentials': self.has_datahub_credentials()
+            'account_id': self.credentials.account_id
         }
         
         try:
@@ -356,7 +336,7 @@ class BoomiDataHubClient:
             test_result['url'] = url
             
             logger.info(f"Testing connection with account ID '{self.credentials.account_id}': {url}")
-            response = self.session.get(url)
+            response = self.session.get(url, timeout=10)
             
             test_result['status_code'] = response.status_code
             test_result['response_content'] = response.text[:500] if response.text else None
@@ -465,11 +445,9 @@ class BoomiDataHubClient:
                 return None
             raise
     
-    # FIXED: Parameterised Query Methods with Better XML Parsing
-    
     def query_records_by_parameters(self, universe_id: str, repository_id: str, 
-                               fields: List[str] = None, filters: List[Dict[str, Any]] = None,
-                               limit: int = 100, offset_token: str = "") -> Dict[str, Any]:
+                                   fields: List[str] = None, filters: List[Dict[str, Any]] = None,
+                                   limit: int = 100, offset_token: str = "", token: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute a parameterised query against Boomi DataHub records
         
@@ -480,10 +458,22 @@ class BoomiDataHubClient:
             filters: List of filter dictionaries with fieldId, operator, and value
             limit: Maximum number of records to return (default: 100, max: 1000)
             offset_token: Pagination token for continuing previous queries
+            token: OAuth token for user authorization
             
         Returns:
             Dictionary containing query results and metadata
         """
+        if token:
+            try:
+                payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+                user_id = payload.get("sub")
+                if user_id not in USER_SCOPES or "none" in USER_SCOPES.get(user_id, ["none"]):
+                    logger.error("User lacks data access permissions")
+                    return {"status": "error", "error": "User lacks data access permissions"}
+            except jwt.PyJWTError:
+                logger.error("Invalid OAuth token for DataHub query")
+                return {"status": "error", "error": "Invalid OAuth token"}
+
         try:
             # Validate inputs
             if not universe_id or not repository_id:
@@ -518,32 +508,26 @@ class BoomiDataHubClient:
             query_request = self._build_query_xml(fields, filters, limit, offset_token)
             
             # Construct the API URL - use DataHub URL structure
-            # Convert api.boomi.com to the hub URL if needed
             hub_base_url = self.credentials.base_url.replace('api.boomi.com', 'c01-aus-local.hub.boomi.com')
             base_url = f"{hub_base_url.rstrip('/')}/mdm/universes/{universe_id}/records/query"
             params = {"repositoryId": repository_id}
             
-            # Use DataHub credentials if available, otherwise use regular credentials
-            if self.credentials.datahub_username and self.credentials.datahub_password:
-                auth_username = self.credentials.datahub_username
-                auth_password = self.credentials.datahub_password
-                logger.info("🔑 Using separate DataHub credentials for record query")
-            else:
-                auth_username = self.credentials.username
-                auth_password = self.credentials.password
-                logger.info("🔑 Using regular API credentials for record query")
+            # Use DataHub-specific credentials for record queries
+            auth_username = self.datahub_username
+            auth_password = self.datahub_password
+            logger.info(f"🔑 Using DataHub credentials for record query: {auth_username}")
             
-            # Create auth header with appropriate credentials
+            # Create auth header with DataHub credentials
             auth_string = f"{auth_username}:{auth_password}"
             auth_bytes = auth_string.encode('ascii')
             auth_b64 = base64.b64encode(auth_bytes).decode('ascii')
             
-            # Prepare headers with multiple authentication attempts
+            # Prepare headers
             headers = {
                 "Content-Type": "application/xml",
                 "Authorization": f"Basic {auth_b64}",
                 "Accept": "application/xml",
-                "User-Agent": "BoomiDataHubClient/1.0"
+                "User-Agent": "BoomiDataHubClient/2.0"
             }
             
             logger.info(f"🔍 Executing query to: {base_url}")
@@ -551,7 +535,7 @@ class BoomiDataHubClient:
             logger.debug(f"📋 Headers: {headers}")
             
             # Execute the request
-            response = requests.post(
+            response = self.session.post(
                 base_url,
                 params=params,
                 headers=headers,
@@ -562,47 +546,6 @@ class BoomiDataHubClient:
             logger.info(f"📊 Response status: {response.status_code}")
             logger.debug(f"📋 Response headers: {dict(response.headers)}")
             logger.debug(f"📋 Response content (first 1000 chars): {response.text[:1000]}")
-            
-            # Special handling for 401 errors with detailed troubleshooting
-            if response.status_code == 401:
-                logger.error("❌ 401 UNAUTHORIZED - Authentication failed for DataHub queries")
-                
-                return {
-                    "status": "error",
-                    "timestamp": datetime.now().isoformat(),
-                    "error": "Authentication failed for DataHub record queries",
-                    "status_code": 401,
-                    "troubleshooting": {
-                        "issue": "DataHub query authentication failed",
-                        "possible_causes": [
-                            "Different permissions required for DataHub vs API access",
-                            "User account lacks DataHub query permissions",
-                            "Universe or repository access restrictions",
-                            "Different authentication method required for DataHub"
-                        ],
-                        "next_steps": [
-                            "Set separate DataHub credentials using BOOMI_DATAHUB_USERNAME and BOOMI_DATAHUB_PASSWORD",
-                            "Or use client.set_datahub_credentials(username, password)",
-                            "Verify your DataHub query credentials with your Boomi administrator",
-                            "Test with the auth_debug.py script after setting DataHub credentials",
-                            "Contact Boomi administrator for DataHub query permissions"
-                        ],
-                        "auth_info": {
-                            "model_api_works": "Yes (you can retrieve model information)",
-                            "datahub_query_fails": "Yes (401 UNAUTHORIZED)",
-                            "url_used": base_url,
-                            "auth_header": f"Basic {auth_b64[:20]}...",
-                            "has_datahub_credentials": self.has_datahub_credentials()
-                        }
-                    },
-                    "query_parameters": {
-                        "universe_id": universe_id,
-                        "repository_id": repository_id,
-                        "fields": fields,
-                        "filters": filters or [],
-                        "limit": limit
-                    }
-                }
             
             # Process the response
             if response.status_code == 200:
@@ -749,11 +692,15 @@ class BoomiDataHubClient:
         return ET.tostring(root, encoding='unicode')
 
     def _parse_query_response_fixed(self, xml_response: str) -> Dict[str, Any]:
-        import xml.etree.ElementTree as ET
-        import logging
+        """
+        Parse XML response from Boomi DataHub query into JSON format
         
-        logger = logging.getLogger(__name__)
-        
+        Args:
+            xml_response: XML response string from Boomi API
+            
+        Returns:
+            Dictionary containing parsed records and metadata
+        """
         try:
             root = ET.fromstring(xml_response)
             
@@ -812,225 +759,6 @@ class BoomiDataHubClient:
         except Exception as e:
             logger.error(f"General parsing error: {e}")
             raise ValueError(f"Failed to process XML response: {e}")
-
-    # def _parse_query_response_fixed(self, xml_response: str) -> Dict[str, Any]:
-    #     """
-    #     FIXED: Parse XML response from Boomi DataHub query into JSON format with namespace handling
-        
-    #     Args:
-    #         xml_response: XML response string from Boomi API
-            
-    #     Returns:
-    #         Dictionary containing parsed records and metadata
-    #     """
-    #     try:
-    #         logger.debug(f"🔍 Parsing XML response (length: {len(xml_response)})")
-    #         logger.debug(f"🔍 First 500 chars of XML: {xml_response[:500]}")
-            
-    #         root = ET.fromstring(xml_response)
-    #         logger.debug(f"🔍 Root element: {root.tag}")
-            
-    #         # Extract namespace from root element
-    #         if '}' in root.tag:
-    #             ns_uri = root.tag.split('}')[0][1:]
-    #             ns = {'ns': ns_uri}
-    #         else:
-    #             ns = {}
-            
-    #         records = []
-            
-    #         # Find record elements with namespace
-    #         record_elements = root.findall(".//ns:record", ns) if ns else root.findall(".//record")
-    #         if not record_elements:
-    #             record_elements = root.findall(".//ns:Record", ns) if ns else root.findall(".//Record")
-            
-    #         logger.debug(f"🔍 Found {len(record_elements)} record elements")
-            
-    #         for record_elem in record_elements:
-    #             record_data = {}
-                
-    #             # Extract record ID if available
-    #             record_id = record_elem.get("id") or record_elem.get("ID")
-    #             if record_id:
-    #                 record_data["_record_id"] = record_id
-                
-    #             logger.debug(f"🔍 Processing record element: {record_elem.tag}")
-    #             logger.debug(f"🔍 Record children: {[child.tag for child in record_elem]}")
-                
-    #             # Try to find field elements with namespace
-    #             field_elements = record_elem.findall(".//ns:field", ns) if ns else record_elem.findall(".//field")
-    #             if not field_elements:
-    #                 field_elements = record_elem.findall(".//ns:Field", ns) if ns else record_elem.findall(".//Field")
-                
-    #             logger.debug(f"🔍 Found {len(field_elements)} field elements")
-                
-    #             for field_elem in field_elements:
-    #                 field_id = field_elem.get("id") or field_elem.get("ID") or field_elem.get("name")
-    #                 if not field_id and ns:
-    #                     field_id = field_elem.tag.split('}')[-1]
-    #                 elif not field_id:
-    #                     field_id = field_elem.tag
-                    
-    #                 field_value = field_elem.text or ""
-    #                 if field_id:
-    #                     record_data[field_id] = field_value
-    #                     logger.debug(f"🔍 Added field: {field_id} = {field_value}")
-                
-    #             if not field_elements:
-    #                 logger.debug("🔍 No field elements found, trying direct children")
-    #                 for child in record_elem:
-    #                     if ns and '}' in child.tag:
-    #                         field_name = child.tag.split('}')[-1]
-    #                     else:
-    #                         field_name = child.tag
-    #                     field_value = child.text or ""
-    #                     record_data[field_name] = field_value
-    #                     logger.debug(f"🔍 Added direct child: {field_name} = {field_value}")
-                
-    #             if record_data:
-    #                 records.append(record_data)
-    #                 logger.debug(f"🔍 Added record with {len(record_data)} fields")
-            
-    #         # Extract pagination information
-    #         has_more = False
-    #         next_offset_token = ""
-            
-    #         for elem in root.iter():
-    #             if 'pagination' in elem.tag.lower():
-    #                 logger.debug(f"🔍 Found pagination element: {elem.tag}")
-    #                 for child in elem:
-    #                     if 'hasmore' in child.tag.lower():
-    #                         has_more = child.text.lower() == "true"
-    #                     elif 'offset' in child.tag.lower() or 'token' in child.tag.lower():
-    #                         next_offset_token = child.text or ""
-            
-    #         result = {
-    #             "records": records,
-    #             "total_returned": len(records),
-    #             "has_more": has_more,
-    #             "next_offset_token": next_offset_token
-    #         }
-            
-    #         logger.info(f"✅ Successfully parsed {len(records)} records from XML response")
-    #         return result
-            
-    #     except ET.ParseError as e:
-    #         logger.error(f"❌ XML parsing error: {e}")
-    #         raise ValueError(f"Failed to parse XML response: {e}")
-    #     except Exception as e:
-    #         logger.error(f"❌ General parsing error: {e}")
-    #         logger.error(f"❌ XML content that failed: {xml_response[:1000]}")
-    #         raise ValueError(f"Failed to process XML response: {e}")
-
-    # def _parse_query_response_fixed(self, xml_response: str) -> Dict[str, Any]:
-    #     """
-    #     FIXED: Parse XML response from Boomi DataHub query into JSON format
-        
-    #     Args:
-    #         xml_response: XML response string from Boomi API
-            
-    #     Returns:
-    #         Dictionary containing parsed records and metadata
-    #     """
-    #     try:
-    #         logger.debug(f"🔍 Parsing XML response (length: {len(xml_response)})")
-    #         logger.debug(f"🔍 First 500 chars of XML: {xml_response[:500]}")
-            
-    #         root = ET.fromstring(xml_response)
-    #         logger.debug(f"🔍 Root element: {root.tag}")
-            
-    #         records = []
-            
-    #         # Try multiple approaches to find record elements
-    #         # Approach 1: Look for direct record elements
-    #         record_elements = root.findall(".//record")
-    #         if not record_elements:
-    #             # Approach 2: Look for Record with capital R
-    #             record_elements = root.findall(".//Record")
-            
-    #         if not record_elements:
-    #             # Approach 3: Look for any element that might contain records
-    #             # Check all child elements to understand the structure
-    #             logger.debug(f"🔍 Root children: {[child.tag for child in root]}")
-                
-    #             # Try to find any elements that might be records
-    #             for elem in root.iter():
-    #                 logger.debug(f"🔍 Found element: {elem.tag} with attribs: {elem.attrib}")
-    #                 if elem.tag.lower().endswith('record') or 'record' in elem.tag.lower():
-    #                     record_elements.append(elem)
-            
-    #         logger.debug(f"🔍 Found {len(record_elements)} record elements")
-            
-    #         for record_elem in record_elements:
-    #             record_data = {}
-                
-    #             # Extract record ID if available
-    #             record_id = record_elem.get("id") or record_elem.get("ID")
-    #             if record_id:
-    #                 record_data["_record_id"] = record_id
-                
-    #             logger.debug(f"🔍 Processing record element: {record_elem.tag}")
-    #             logger.debug(f"🔍 Record children: {[child.tag for child in record_elem]}")
-                
-    #             # Extract field values - try different structures
-    #             field_elements = record_elem.findall(".//field")
-    #             if not field_elements:
-    #                 field_elements = record_elem.findall(".//Field")
-                
-    #             logger.debug(f"🔍 Found {len(field_elements)} field elements")
-                
-    #             for field_elem in field_elements:
-    #                 field_id = field_elem.get("id") or field_elem.get("ID") or field_elem.get("name")
-    #                 field_value = field_elem.text or ""
-                    
-    #                 if field_id:
-    #                     record_data[field_id] = field_value
-    #                     logger.debug(f"🔍 Added field: {field_id} = {field_value}")
-                
-    #             # If no field elements found, try direct child elements
-    #             if not field_elements:
-    #                 logger.debug("🔍 No field elements found, trying direct children")
-    #                 for child in record_elem:
-    #                     field_name = child.tag
-    #                     field_value = child.text or ""
-    #                     record_data[field_name] = field_value
-    #                     logger.debug(f"🔍 Added direct child: {field_name} = {field_value}")
-                
-    #             if record_data:  # Only add if we found some data
-    #                 records.append(record_data)
-    #                 logger.debug(f"🔍 Added record with {len(record_data)} fields")
-            
-    #         # Extract pagination information
-    #         has_more = False
-    #         next_offset_token = ""
-            
-    #         # Look for pagination elements
-    #         for elem in root.iter():
-    #             if 'pagination' in elem.tag.lower():
-    #                 logger.debug(f"🔍 Found pagination element: {elem.tag}")
-    #                 for child in elem:
-    #                     if 'hasmore' in child.tag.lower():
-    #                         has_more = child.text.lower() == "true"
-    #                     elif 'offset' in child.tag.lower() or 'token' in child.tag.lower():
-    #                         next_offset_token = child.text or ""
-            
-    #         result = {
-    #             "records": records,
-    #             "total_returned": len(records),
-    #             "has_more": has_more,
-    #             "next_offset_token": next_offset_token
-    #         }
-            
-    #         logger.info(f"✅ Successfully parsed {len(records)} records from XML response")
-    #         return result
-            
-    #     except ET.ParseError as e:
-    #         logger.error(f"❌ XML parsing error: {e}")
-    #         raise ValueError(f"Failed to parse XML response: {e}")
-    #     except Exception as e:
-    #         logger.error(f"❌ General parsing error: {e}")
-    #         logger.error(f"❌ XML content that failed: {xml_response[:1000]}")
-    #         raise ValueError(f"Failed to process XML response: {e}")
 
     def get_supported_filter_operators(self) -> List[str]:
         """
@@ -1095,6 +823,12 @@ class BoomiDataHubClient:
         except Exception as e:
             logger.error(f"Failed to export models: {e}")
 
+    def close(self):
+        """Close HTTP session and release resources"""
+        if self.session:
+            self.session.close()
+            logger.info("✅ BoomiDataHubClient session closed")
+        self.session = None
 
 def main():
     """
@@ -1119,17 +853,12 @@ def main():
             return 1
         else:
             print("✅ Connection test successful!")
-            if test_result.get('has_datahub_credentials'):
-                print("🔑 DataHub credentials configured")
-            else:
-                print("⚠️  No separate DataHub credentials - using API credentials for queries")
         
         return 0
         
     except Exception as e:
         logger.error(f"Error in main execution: {e}")
         return 1
-
 
 if __name__ == "__main__":
     exit(main())

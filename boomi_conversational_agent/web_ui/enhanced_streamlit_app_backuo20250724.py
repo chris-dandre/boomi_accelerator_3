@@ -407,10 +407,9 @@ class EnhancedSWXWebInterface:
                     st.session_state.authenticated = True
                     st.session_state.user_info = user
                     st.session_state.access_token = bearer_token
-                    st.session_state.login_success = True  # Flag for welcome message
                     
-                    # Don't show welcome message or token on login page - show on main page
-                    st.success("✅ Authentication successful!")
+                    st.success(f"✅ Welcome, {user['full_name']}!")
+                    st.info(f"🔐 OAuth token obtained: {bearer_token[:50]}...")
                     return True
                 else:
                     st.error("❌ Failed to obtain OAuth token")
@@ -562,37 +561,59 @@ class EnhancedSWXWebInterface:
                 # Capture relevant workflow steps for UI display
                 message = ' '.join(str(arg) for arg in args)
                 
-                # Capture ALL processing steps for real-time VP demo display
-                # Only exclude very verbose debug messages
-                if not any(skip in message for skip in [
-                    "DEBUG:",
-                    "INFO:httpx:",
-                    "🔍 Debug - Raw models from MCP:",
-                    "🔍 Debug - Raw models sample:",
-                    "🔍 Debug - Processed models:",
-                    "🔍 Field Discovery - Raw result sample:",
-                    "🔍 ModelDiscovery: Full response:",
-                    "🔍 ModelDiscovery: Retrieved non-list",
-                    "🔍 ModelDiscovery: Models type:",
-                    "🔍 Field Discovery - MCP client type:",
-                    "🔍 Field Discovery - MCP client methods:"
+                # Filter for the specific patterns we want to show
+                if any(pattern in message for pattern in [
+                    "🚀 Starting unified orchestration",
+                    "🔐 Step 1: Bearer Token Validation",
+                    "✅ Token validated via introspection",
+                    "🔍 Step 2: User Authorization Check", 
+                    "✅ User authorization approved",
+                    "🧹 Step 3: Layer 1 - Input Sanitization",
+                    "✅ Input sanitization complete",
+                    "🧠 Step 4: Layer 2 - Semantic and Entity Analysis",
+                    "✅ Semantic and entity analysis complete, intent:",
+                    "🏢 Step 5: Layer 3 - Business Context Validation",
+                    "✅ Business context validated",
+                    "✅ Step 6: Layer 4 - Final Approval",
+                    "✅ Final approval granted",
+                    "🔍 Step 7: Model Discovery",
+                    "✅ Discovered",
+                    "🔄 Step 7: Query Execution",
+                    "🧠 Query Analysis: Using AI semantic understanding",
+                    "💭 Claude Processing:",
+                    "✅ Claude Analysis Complete",
+                    "🧠 Meta-Query Detected:",
+                    "🔧 Query Builder:",
+                    "🤔 ReAct Query Builder:",
+                    "💭 THOUGHT:",
+                    "🎯 ACTION:",
+                    "👁️  OBSERVATION:",
+                    "💭 Reasoning:",
+                    "🧠 Claude Field Mapping:",
+                    "✅ Claude mapped",
+                    "✅ Query executed successfully",
+                    "📝 Step 8: Response Generation",
+                    "✅ Response generated successfully"
                 ]):
                     step_count += 1
                     # Clean up the message for display
                     clean_message = message.strip()
                     
-                    # Add to workflow log for real-time display
-                    workflow_log.append(clean_message)
-                    
-                    # Update progress based on step count (more granular for VP demo)
-                    progress = min(step_count * 0.05, 0.95)
-                    progress_bar.progress(progress)
-                    
-                    # Update UI display in real-time (show more lines for VP demo)
-                    status_output.text("\n".join(workflow_log[-25:]))  # Show last 25 lines
-                    
-                    # Add small delay for visual effect in demo
-                    time.sleep(0.1)
+                    # Skip overly verbose debug lines but keep key info
+                    if not any(skip in clean_message for skip in [
+                        "🔍 ModelDiscovery: Full response:",
+                        "🔍 ModelDiscovery: Retrieved non-list",
+                        "🔍 ModelDiscovery: Models type:",
+                        "Raw Response: ```json"
+                    ]):
+                        workflow_log.append(clean_message)
+                        
+                        # Update progress based on step count
+                        progress = min(step_count * 0.08, 0.95)
+                        progress_bar.progress(progress)
+                        
+                        # Update UI display
+                        status_output.text("\n".join(workflow_log[-15:]))  # Show last 15 lines
             
             try:
                 # Replace print function temporarily
@@ -659,14 +680,14 @@ class EnhancedSWXWebInterface:
                 if isinstance(response, dict):
                     # Handle structured response
                     if response.get("message"):
-                        self._display_formatted_response(response["message"], response.get("item_count", 0))
+                        st.markdown(response["message"])
                     elif response.get("response_type"):
                         st.write(f"**Type:** {response['response_type']}")
                         if response.get("data"):
                             st.json(response["data"])
                 else:
                     # Handle string response
-                    self._display_formatted_response(response)
+                    st.write(response)
             
             # Pipeline metadata - aligned with orchestrator structure
             metadata = result.get("pipeline_metadata", {})
@@ -726,12 +747,6 @@ class EnhancedSWXWebInterface:
     
     def render_chat_interface(self):
         """Render enhanced chat interface with improved layout"""
-        
-        # Show welcome message once after successful login
-        if st.session_state.get("login_success", False):
-            user_info = st.session_state.get("user_info", {})
-            st.success(f"✅ Welcome, {user_info.get('full_name', 'User')}! You are successfully authenticated.")
-            st.session_state.login_success = False  # Clear the flag
         
         st.markdown("### 💬 Conversational Interface")
         
@@ -817,134 +832,15 @@ class EnhancedSWXWebInterface:
                                 st.text("\n".join(chat['processing_steps']))
                         
                         if chat['result']['success']:
-                            # For history, show formatted response
+                            # For history, show simplified response
                             response = chat['result']['response']
-                            st.markdown("**Response:**")
                             if isinstance(response, dict) and response.get('message'):
-                                self._display_formatted_response(response['message'], response.get('item_count', 0))
+                                st.markdown(f"**Response:** {response['message']}")
                             else:
-                                self._display_formatted_response(response)
+                                st.markdown(f"**Response:** {response}")
                         else:
                             st.error(f"**Error:** {chat['result'].get('error', 'Unknown error')}")
     
-    def _display_formatted_response(self, message, item_count=0):
-        """Display formatted response with proper handling of tables and code blocks"""
-        if not message:
-            return
-        
-        # Add custom CSS for better table display
-        st.markdown("""
-        <style>
-        .stCode {
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.4;
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 4px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Check if message contains a code block (our table format)
-        if "```" in message:
-            # Split message into parts (before table, table, after table)
-            parts = message.split("```")
-            
-            # Display text before table
-            if parts[0].strip():
-                st.markdown(parts[0].strip())
-            
-            # Display table in code block with enhanced styling
-            if len(parts) > 1:
-                table_content = parts[1].strip()
-                if table_content:
-                    # Check if table contains URLs that should be made clickable
-                    if 'http' in table_content.lower():
-                        # Convert to proper HTML table with clickable links
-                        html_table = self._convert_text_table_to_html(table_content)
-                        st.markdown(html_table, unsafe_allow_html=True)
-                    else:
-                        # Use st.code for monospace alignment - this preserves the exact formatting
-                        st.code(table_content, language=None)
-            
-            # Display text after table
-            if len(parts) > 2 and parts[2].strip():
-                st.markdown(parts[2].strip())
-        else:
-            # Regular markdown display
-            st.markdown(message)
-        
-        # Add summary info if available
-        if item_count > 0:
-            st.info(f"📈 Total items: {item_count}")
-    
-    def _convert_text_table_to_html(self, table_text: str) -> str:
-        """Convert text-based table to HTML table with clickable URLs"""
-        import re
-        
-        lines = table_text.strip().split('\n')
-        if len(lines) < 2:  # Need at least header and one data row
-            return f'<pre style="font-family: monospace; background-color: #f8f9fa; padding: 10px; border-radius: 4px;">{table_text}</pre>'
-        
-        # Parse table structure - handle both with and without separator lines
-        header_line = lines[0]
-        data_start_idx = 1
-        
-        # Skip separator line if it exists (line with dashes/underscores)
-        if len(lines) > 1 and any(char in lines[1] for char in ['─', '-', '=']):
-            data_start_idx = 2
-        
-        data_lines = lines[data_start_idx:]
-        
-        # Find column positions by analyzing the header and first data row
-        headers = header_line.split()
-        
-        # Simple approach: split data rows by whitespace, but handle URLs specially
-        html = '''
-        <table style="font-family: 'Courier New', monospace; border-collapse: collapse; background-color: #f8f9fa; width: 100%; margin: 10px 0;">
-            <thead>
-                <tr style="border-bottom: 2px solid #333; background-color: #e9ecef;">
-        '''
-        
-        # Add headers with proper styling
-        for header in headers:
-            html += f'<th style="text-align: left; padding: 12px; font-weight: bold; border-right: 1px solid #ccc;">{header}</th>'
-        
-        html += '</tr></thead><tbody>'
-        
-        # Process data rows
-        for line in data_lines:
-            if line.strip():
-                html += '<tr style="border-bottom: 1px solid #ddd;">'
-                
-                # Split line into columns - handle the case where we have product name and URL
-                parts = line.strip().split()
-                
-                # First column: product name (may contain spaces, so take everything before the URL)
-                url_match = re.search(r'https?://\S+', line)
-                if url_match:
-                    url_start = url_match.start()
-                    product_name = line[:url_start].strip()
-                    url = url_match.group(0)
-                    
-                    # Product name column
-                    html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{product_name}</td>'
-                    
-                    # URL column with clickable link
-                    clickable_url = f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; word-break: break-all;">{url}</a>'
-                    html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{clickable_url}</td>'
-                else:
-                    # Fallback: split by whitespace
-                    for i, part in enumerate(parts):
-                        if i < len(headers):
-                            html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{part}</td>'
-                
-                html += '</tr>'
-        
-        html += '</tbody></table>'
-        return html
-
     def render_example_queries(self):
         """Render example queries based on user role"""
         

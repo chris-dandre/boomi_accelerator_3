@@ -244,7 +244,11 @@ Available Data Models:
 
 Please analyze and provide:
 1. Intent (COUNT, LIST, COMPARE, ANALYZE, META)
-2. Entities mentioned (extract specific entities like brand names, products, etc.)
+2. Entities mentioned - extract ALL relevant entities including:
+   - Specific values (Sony, Apple, Tesla, etc.)
+   - Object types (products, users, advertisements, etc.)
+   - Field indicators (descriptions, names, titles, prices, dates, etc.)
+   - Time periods (this quarter, last month, etc.)
 3. Most relevant model(s) for this query
 4. Query complexity (SIMPLE, COMPLEX, META)
 5. Whether this is a meta-query about the system itself
@@ -253,13 +257,23 @@ Respond in this JSON format:
 {{
     "intent": "LIST",
     "entities": [
-        {{"text": "entity_name", "type": "BRAND|OBJECT|TIME_PERIOD|META", "confidence": 0.95}}
+        {{"text": "entity_name", "type": "BRAND|OBJECT|FIELD_INDICATOR|TIME_PERIOD|META", "confidence": 0.95}}
     ],
     "query_type": "SIMPLE",
     "suggested_models": ["model_name"],
     "is_meta_query": false,
     "reasoning": "Explanation of why this model was chosen"
 }}
+
+CRITICAL: Extract field indicators as entities:
+- If query mentions "descriptions" → extract as FIELD_INDICATOR entity
+- If query mentions "names" → extract as FIELD_INDICATOR entity  
+- If query mentions "titles", "prices", "dates", "IDs" → extract as FIELD_INDICATOR entities
+- These indicate what specific fields the user wants to see in results
+
+Examples:
+- "show product descriptions" → entities: [{{"text": "product", "type": "OBJECT"}}, {{"text": "descriptions", "type": "FIELD_INDICATOR"}}]
+- "list user names" → entities: [{{"text": "user", "type": "OBJECT"}}, {{"text": "names", "type": "FIELD_INDICATOR"}}]
 
 IMPORTANT - Distinguish between data queries and meta-queries:
 - Data queries: "list users", "show Sony products" → Query actual data records, use specific models

@@ -300,6 +300,17 @@ Return only the response text, no JSON or formatting.
         if record_count > self.large_dataset_threshold:
             return self._generate_large_dataset_response(user_query, data, metadata)
         
+        # Sort data alphabetically for better organization
+        if data and len(data) > 1:
+            # Try to sort by ADVERTISER if it exists, otherwise by first meaningful field
+            sort_key = self._get_sort_key_for_data(data[0], user_query)
+            if sort_key:
+                try:
+                    data = sorted(data, key=lambda x: str(x.get(sort_key, '')).upper())
+                    print(f"📋 Data sorted alphabetically by {sort_key}")
+                except Exception as e:
+                    print(f"⚠️ Could not sort data: {e}")
+        
         # Use Claude for intelligent field selection and natural language generation
         if self.claude_client:
             print("🧠 Claude Analysis: Analyzing data structure and user intent...")
@@ -322,19 +333,39 @@ For example:
 - If they asked about "users", show names like "John Smith" using FIRSTNAME + LASTNAME, or USERID if names not available
 - If they asked about "opportunities", show opportunity names/titles not IDs
 
-Generate the response in this format:
-Here are the [items] I found ([count] total):
+Generate the response in this professional tabular format using ALL available fields from the data:
 
-1. [meaningful business value]
-2. [meaningful business value]
-...
+**Query Results (X total):** (where X is the actual count, customize the title based on what user asked for)
+
+```
+[Show ALL fields present in the data as columns with proper alignment]
+[Use field names as headers - ADVERTISER, PRODUCT, TARGET_MARKET_BRIEF, etc.]
+[Align columns properly with appropriate spacing]
+[Include all field data from the records]
+```
 
 IMPORTANT: 
+- Examine the actual data provided and create columns for up to 3 most relevant fields
+- Use the ACTUAL field names as column headers (TARGET_MARKET_BRIEF, ADVERTISER, PRODUCT, etc.)
+- Show FULL content for all fields - no truncation needed
+- Prioritize: ADVERTISER → PRODUCT → TARGET_MARKET_BRIEF for advertising queries
+- Limit to 3 fields maximum for optimal readability
+
+CRITICAL FORMATTING REQUIREMENTS:
+- Create columns for UP TO 3 FIELDS ONLY (most relevant to the query)
+- Column widths: 18 chars for ADVERTISER, 25 chars for PRODUCT, expand as needed for TARGET_MARKET_BRIEF
+- Use dashes (─) under each header matching the column width exactly
+- Align all columns properly with consistent spacing
+- Show FULL content for TARGET_MARKET_BRIEF field - NO truncation
+- Table width will expand as needed to show complete information
+- Data is already sorted alphabetically - maintain this order
 - Always show actual data from the provided records, not placeholders
 - If total results > 10: show exactly 10 items and mention "... and X more items"
 - If total results <= 10: show all available items
 - Use the best available fields (names > IDs)
 - Extract actual field values from the data, don't use generic placeholders
+- Format with clear section headers using **bold**
+- Use professional business language
 
 Return only the response text, no JSON or additional formatting.
 """
@@ -362,16 +393,26 @@ Return only the response text, no JSON or additional formatting.
                 print("🔄 Falling back to rule-based field selection...")
                 pass
         
-        # Fallback response with smarter field selection
-        print("🔧 Rule-Based Analysis: Using fallback field selection logic...")
+        # Fallback response with tabular formatting
+        print("🔧 Rule-Based Analysis: Using fallback tabular formatting...")
         print(f"   Query Context: '{user_query}'")
         print(f"   Available Fields: {list(data[0].keys()) if data else 'None'}")
+        
+        # Sort data for fallback too
+        if data and len(data) > 1:
+            sort_key = self._get_sort_key_for_data(data[0], user_query)
+            if sort_key:
+                try:
+                    data = sorted(data, key=lambda x: str(x.get(sort_key, '')).upper())
+                    print(f"📋 Fallback data sorted alphabetically by {sort_key}")
+                except Exception as e:
+                    print(f"⚠️ Could not sort fallback data: {e}")
         
         # Apply smart limit: show 10 if > 10, otherwise show all
         display_limit = min(10, record_count)
         display_data = data[:display_limit]
-        formatted_data = self._format_list_with_smart_fields(display_data, user_query)
-        message = f"Here are the results I found ({record_count} total):\n\n{formatted_data}"
+        formatted_data = self._format_as_aligned_table(display_data, user_query)
+        message = f"**Query Results ({record_count} total):**\n\n```\n{formatted_data}\n```"
         
         print(f"✅ Rule-Based Response Generated:")
         print(f"   Field Selection Logic Applied")
@@ -564,10 +605,10 @@ Return only the response text, no JSON or formatting.
             return "No items to display"
         
         formatted_items = []
-        for i, item in enumerate(data[:10], 1):  # Limit to 10 items
+        for item in data[:10]:  # Limit to 10 items
             # Smart field selection based on query context
             display_value = self._select_best_display_field(item, user_query)
-            formatted_items.append(f"{i}. {display_value}")
+            formatted_items.append(f"• {display_value}")
         
         return '\n'.join(formatted_items)
     
@@ -654,7 +695,7 @@ Return only the response text, no JSON or formatting.
             return "No items to display"
         
         formatted_items = []
-        for i, item in enumerate(data[:10], 1):  # Limit to 10 items
+        for item in data[:10]:  # Limit to 10 items
             # Find the most relevant field to display
             display_field = None
             for field in ['PRODUCT', 'product_name', 'name', 'title', 'campaign_name', 'ADVERTISER']:
@@ -663,11 +704,11 @@ Return only the response text, no JSON or formatting.
                     break
             
             if display_field:
-                formatted_items.append(f"{i}. {item[display_field]}")
+                formatted_items.append(f"• {item[display_field]}")
             else:
                 # Use first available field
                 first_key = list(item.keys())[0] if item else 'unknown'
-                formatted_items.append(f"{i}. {item.get(first_key, 'Unknown')}")
+                formatted_items.append(f"• {item.get(first_key, 'Unknown')}")
         
         return '\n'.join(formatted_items)
     
@@ -693,6 +734,245 @@ Return only the response text, no JSON or formatting.
             rows.append(" | ".join(row_values))
         
         return '\n'.join(rows)
+    
+    def _format_as_aligned_table(self, data: List[Dict[str, Any]], user_query: str) -> str:
+        """Format data as an aligned table with proper column spacing"""
+        if not data:
+            return "No data to display"
+        
+        # Get the most relevant fields based on query context
+        relevant_fields = self._get_relevant_fields_for_query(data[0].keys(), user_query)
+        
+        # Calculate column widths with minimum sizes for readability (3-field optimized)
+        col_widths = {}
+        num_fields = len(relevant_fields)
+        
+        for i, field in enumerate(relevant_fields):
+            # Set optimal widths for 3-field display (total ~85 chars for terminal compatibility)
+            if field == 'ADVERTISER':
+                base_width = 18  # Slightly smaller for 3-field layout
+            elif field == 'PRODUCT':
+                base_width = 25  # Good size for product names
+            elif field in ['TARGET_MARKET_BRIEF', 'DESCRIPTION']:
+                base_width = 80  # Allow full content display with wrapping
+            else:
+                # Dynamic width based on position and remaining space
+                if i == 0:
+                    base_width = 18
+                elif i == 1:
+                    base_width = 25  
+                else:  # Third field
+                    base_width = 30
+            
+            col_widths[field] = max(base_width, len(field))
+            
+            # Check data lengths and adjust if needed (with reasonable limits)
+            for item in data:
+                value_str = str(item.get(field, ''))
+                # Allow full width for description fields, cap others
+                if field in ['TARGET_MARKET_BRIEF', 'DESCRIPTION']:
+                    # No maximum width limit - show full content
+                    col_widths[field] = max(col_widths[field], len(value_str) + 1)
+                else:
+                    # Cap other fields to prevent extremely wide tables
+                    max_width = 30
+                    actual_width = min(len(value_str) + 1, max_width)
+                    col_widths[field] = max(col_widths[field], actual_width)
+        
+        # Create header row
+        header_parts = []
+        separator_parts = []
+        for field in relevant_fields:
+            header_parts.append(field.ljust(col_widths[field]))
+            separator_parts.append('─' * col_widths[field])
+        
+        table_lines = [
+            ' '.join(header_parts).rstrip(),
+            ' '.join(separator_parts).rstrip()
+        ]
+        
+        # Create data rows with full content for descriptions and clickable URLs
+        for item in data:
+            row_parts = []
+            for field in relevant_fields:
+                value = str(item.get(field, ''))
+                
+                # Make URLs clickable (currently disabled for web compatibility)
+                value = self._make_urls_clickable(value, field)
+                
+                # No truncation for description fields - show full content
+                if field in ['TARGET_MARKET_BRIEF', 'DESCRIPTION']:
+                    row_parts.append(value.ljust(col_widths[field]))
+                else:
+                    # Truncation only for non-description fields if needed
+                    if len(value) > col_widths[field] - 1:  # -1 for padding
+                        value = value[:col_widths[field] - 4] + "..."  # -4 for "..." + space
+                    row_parts.append(value.ljust(col_widths[field]))
+            table_lines.append(' '.join(row_parts).rstrip())
+        
+        return '\n'.join(table_lines)
+    
+    def _get_relevant_fields_for_query(self, available_fields, user_query: str) -> List[str]:
+        """Get the most relevant fields to display based on query context"""
+        query_lower = user_query.lower()
+        relevant_fields = []
+        
+        # Convert to list if it's dict_keys
+        field_list = list(available_fields)
+        
+        # Priority fields based on query context
+        if 'advertis' in query_lower or 'company' in query_lower or 'companies' in query_lower:
+            if 'ADVERTISER' in field_list:
+                relevant_fields.append('ADVERTISER')
+        
+        if 'product' in query_lower:
+            if 'PRODUCT' in field_list:
+                relevant_fields.append('PRODUCT')
+        
+        # Check for description-related requests
+        if any(term in query_lower for term in ['description', 'descriptions', 'describe']):
+            for field in ['TARGET_MARKET_BRIEF', 'DESCRIPTION', 'product_description', 'description']:
+                if field in field_list and field not in relevant_fields:
+                    relevant_fields.append(field)
+                    break
+        
+        # Check for video/link-related requests
+        if any(term in query_lower for term in ['video', 'videos', 'link', 'links', 'url', 'watch']):
+            for field in ['VIDEO_LINK', 'video_link', 'VIDEO_URL', 'video_url', 'link', 'url']:
+                if field in field_list and field not in relevant_fields:
+                    relevant_fields.append(field)
+                    break
+        
+        if 'user' in query_lower:
+            # Try to get name fields first
+            for field in ['FIRSTNAME', 'LASTNAME', 'USER_NAME', 'USERID']:
+                if field in field_list and field not in relevant_fields:
+                    relevant_fields.append(field)
+                    if len(relevant_fields) >= 3:  # Limit to 3 user fields
+                        break
+        
+        if 'opportunity' in query_lower:
+            for field in ['opportunity_name', 'title', 'subject', 'opportunity_id']:
+                if field in field_list and field not in relevant_fields:
+                    relevant_fields.append(field)
+                    break
+        
+        # If we don't have enough relevant fields, add some common ones
+        if len(relevant_fields) < 2:
+            common_fields = ['name', 'title', 'description', 'id']
+            for field in field_list:
+                if any(common in field.lower() for common in common_fields):
+                    if field not in relevant_fields:
+                        relevant_fields.append(field)
+                        if len(relevant_fields) >= 3:  # Limit to 3 fields total
+                            break
+        
+        # If still no relevant fields, use first few fields
+        if not relevant_fields:
+            relevant_fields = field_list[:min(3, len(field_list))]
+        
+        # LIMIT TO MAXIMUM 3 FIELDS for optimal display
+        if len(relevant_fields) > 3:
+            relevant_fields = relevant_fields[:3]
+            print(f"📊 Display limited to 3 fields: {relevant_fields}")
+            print(f"   💡 Additional fields available but hidden for readability")
+        
+        return relevant_fields
+    
+    def _get_sort_key_for_data(self, sample_record: Dict[str, Any], user_query: str) -> Optional[str]:
+        """Determine the best field to sort by based on query context and available fields"""
+        if not sample_record:
+            return None
+        
+        query_lower = user_query.lower()
+        available_fields = list(sample_record.keys())
+        
+        # Priority sorting fields based on query context
+        if 'advertis' in query_lower or 'company' in query_lower or 'companies' in query_lower:
+            if 'ADVERTISER' in available_fields:
+                return 'ADVERTISER'
+        
+        if 'user' in query_lower:
+            # For users, prefer sorting by last name, then first name, then username
+            for field in ['LASTNAME', 'FIRSTNAME', 'USER_NAME', 'USERID']:
+                if field in available_fields:
+                    return field
+        
+        if 'product' in query_lower:
+            if 'PRODUCT' in available_fields:
+                return 'PRODUCT'
+        
+        if 'opportunity' in query_lower:
+            for field in ['opportunity_name', 'title', 'subject']:
+                if field in available_fields:
+                    return field
+        
+        # General fallback - look for common sortable fields
+        common_sort_fields = [
+            'ADVERTISER', 'PRODUCT', 'name', 'title', 'USER_NAME', 'FIRSTNAME', 'LASTNAME',
+            'company_name', 'brand_name', 'campaign_name'
+        ]
+        
+        for field in common_sort_fields:
+            if field in available_fields:
+                return field
+        
+        # Last resort - use first field that's not an ID
+        for field in available_fields:
+            if not field.endswith('_ID') and field != '_RECORD_ID':
+                return field
+        
+        return None
+    
+    def _smart_truncate_description(self, text: str, max_length: int) -> str:
+        """Intelligently truncate description text at meaningful break points"""
+        if len(text) <= max_length:
+            return text
+        
+        # Try to break at sentence endings first
+        sentences = text.split('. ')
+        if len(sentences) > 1:
+            result = sentences[0]
+            for sentence in sentences[1:]:
+                if len(result + '. ' + sentence) <= max_length:
+                    result += '. ' + sentence
+                else:
+                    break
+            if len(result) > 20:  # Only use sentence break if we get reasonable content
+                return result
+        
+        # Try to break at commas for better readability
+        comma_parts = text.split(', ')
+        if len(comma_parts) > 1:
+            result = comma_parts[0]
+            for part in comma_parts[1:]:
+                if len(result + ', ' + part) <= max_length:
+                    result += ', ' + part
+                else:
+                    break
+            if len(result) > 20:  # Only use comma break if we get reasonable content
+                return result
+        
+        # Fall back to word boundary
+        words = text.split()
+        result = ""
+        for word in words:
+            if len(result + ' ' + word) <= max_length:
+                if result:
+                    result += ' ' + word
+                else:
+                    result = word
+            else:
+                break
+        
+        return result if result else text[:max_length]
+    
+    def _make_urls_clickable(self, text: str, field_name: str = "") -> str:
+        """Convert URLs in text to clickable format - disabled for web interface compatibility"""
+        # DISABLED: Terminal escape sequences don't work in web browsers
+        # For web interfaces, URLs should be handled at the display layer (Streamlit, HTML)
+        # Return the original text unchanged to avoid rendering escape sequences as text
+        return text
     
     def _format_as_summary(self, data: List[Dict[str, Any]]) -> str:
         """Format data as a summary"""

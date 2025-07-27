@@ -22,10 +22,16 @@ MCP_BASE_URL = f"{SERVER_URL}/mcp"
 
 # Demo personas
 DEMO_USERS = {
-    "martha.stewart": {
-        "name": "Martha Stewart",
+    "sarah.chen": {
+        "name": "Sarah Chen",
         "role": "executive",
         "expected_scopes": ["read:all", "write:all"],
+        "should_have_access": True
+    },
+    "david.williams": {
+        "name": "David Williams",
+        "role": "manager", 
+        "expected_scopes": ["read:advertisements"],
         "should_have_access": True
     },
     "alex.smith": {
@@ -53,10 +59,17 @@ class OAuthTestClient:
         self.access_token = None
         self.refresh_token = None
         
-    def register_client(self, user_id: str = "martha.stewart") -> Dict[str, Any]:
+    def register_client(self, user_id: str = "sarah.chen") -> Dict[str, Any]:
         """Register OAuth client"""
         # Create user-specific client names to trigger different user assignment
-        client_name = f"Alex Smith Client" if user_id == "alex.smith" else "Martha Stewart Client"
+        if user_id == "sarah.chen":
+            client_name = "Sarah Chen Executive Client"
+        elif user_id == "david.williams":
+            client_name = "David Williams Manager Client"
+        elif user_id == "alex.smith":
+            client_name = "Alex Smith Clerk Client"
+        else:
+            client_name = "Default Client"
         
         registration_data = {
             "redirect_uris": ["http://localhost:3000/callback"],
@@ -80,7 +93,7 @@ class OAuthTestClient:
         else:
             return {"success": False, "error": response.text}
     
-    def get_authorization_url(self, user_id: str = "martha.stewart") -> str:
+    def get_authorization_url(self, user_id: str = "sarah.chen") -> str:
         """Generate authorization URL with PKCE"""
         code_verifier, code_challenge = generate_pkce_pair()
         self.code_verifier = code_verifier
@@ -98,7 +111,7 @@ class OAuthTestClient:
         url = f"{OAUTH_BASE_URL}/oauth/authorize?" + "&".join([f"{k}={v}" for k, v in params.items()])
         return url
     
-    def simulate_authorization(self, user_id: str = "martha.stewart") -> Dict[str, Any]:
+    def simulate_authorization(self, user_id: str = "sarah.chen") -> Dict[str, Any]:
         """Simulate authorization flow"""
         # In a real scenario, user would be redirected to auth server
         # Here we directly call the authorization endpoint

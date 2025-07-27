@@ -17,6 +17,7 @@ from prometheus_client import Counter, Histogram
 import requests
 from cli_agent.pipeline.agent_pipeline import AgentPipeline
 from security.hybrid_semantic_analyzer import HybridSemanticAnalyzer
+from security.audit_logger import audit_logger, AuditEvent, AuditEventType, AuditSeverity
 from claude_client import ClaudeClient
 from shared.agent_state import MCPAgentState, StateManager, AuthStatus, SecurityClearance
 from shared.workflow_nodes import WorkflowNodes
@@ -444,11 +445,32 @@ class UnifiedMCPOrchestrator:
     
     async def process_query(self, query: str, user_context: dict, bearer_token: str) -> dict:
         query_counter.labels(interface_type=self.interface_type).inc()
+        start_time = time.time()
+        
+        # Log query start
+        username = user_context.get('username', 'anonymous')
+        user_role = user_context.get('role', 'unknown')
+        
+        await audit_logger.log_event(AuditEvent(
+            event_type=AuditEventType.API_REQUEST,
+            severity=AuditSeverity.INFO,
+            user_id=username,
+            endpoint=f"/{self.interface_type}/query",
+            method="POST",
+            success=True,
+            details={
+                "query": query[:100] + "..." if len(query) > 100 else query,  # Truncate long queries
+                "user_role": user_role,
+                "interface_type": self.interface_type,
+                "query_length": len(query)
+            }
+        ))
+        
         with query_latency.labels(interface_type=self.interface_type).time():
             print(f"🚀 Starting unified orchestration for {self.interface_type} interface")
             print(f"   Query: {query}")
-            print(f"   User: {user_context.get('username', 'anonymous')}")
-            print(f"   Role: {user_context.get('role', 'unknown')}")
+            print(f"   User: {username}")
+            print(f"   Role: {user_role}")
             
             initial_state = self.state_manager.create_initial_state(
                 user_query=query,
@@ -460,6 +482,27 @@ class UnifiedMCPOrchestrator:
                 final_state = await self.agent_graph.ainvoke(initial_state)
                 await self.store_state(final_state)
                 
+                # Log successful completion
+                processing_time = (time.time() - start_time) * 1000
+                success = final_state.get("error_state") is None
+                
+                await audit_logger.log_event(AuditEvent(
+                    event_type=AuditEventType.API_SUCCESS,
+                    severity=AuditSeverity.INFO,
+                    user_id=username,
+                    endpoint=f"/{self.interface_type}/query",
+                    method="POST",
+                    success=success,
+                    processing_time_ms=processing_time,
+                    details={
+                        "security_clearance": final_state.get("security_clearance", "unknown"),
+                        "query_intent": final_state.get("query_intent", "unknown"),
+                        "models_discovered": len(final_state.get("discovered_models", [])),
+                        "error_state": final_state.get("error_state"),
+                        "interface_type": self.interface_type
+                    }
+                ))
+                
                 if self.interface_type == "web":
                     return self._format_web_response(final_state)
                 elif self.interface_type == "mcp":
@@ -469,6 +512,24 @@ class UnifiedMCPOrchestrator:
                     
             except Exception as e:
                 print(f"❌ Orchestration error: {e}")
+                
+                # Log error
+                processing_time = (time.time() - start_time) * 1000
+                await audit_logger.log_event(AuditEvent(
+                    event_type=AuditEventType.API_FAILURE,
+                    severity=AuditSeverity.ERROR,
+                    user_id=username,
+                    endpoint=f"/{self.interface_type}/query",
+                    method="POST",
+                    success=False,
+                    processing_time_ms=processing_time,
+                    details={
+                        "error": str(e),
+                        "interface_type": self.interface_type,
+                        "error_type": type(e).__name__
+                    }
+                ))
+                
                 return self._format_error_response(str(e))
     
     async def store_state(self, state: MCPAgentState):
@@ -479,8 +540,9 @@ class UnifiedMCPOrchestrator:
             await redis.expire(state_id, 3600)
             print(f"✅ State stored in Redis for request: {state['request_id']}")
         except Exception as e:
-            print(f"⚠️ Redis not available, skipping state storage: {e}")
+            # print(f"⚠️ Redis not available, skipping state storage: {e}")
             # Continue without Redis - not critical for basic operation
+            print(f"⚠️ Redis not available, skipping state storage")
     
     def _format_web_response(self, state: MCPAgentState) -> dict:
         success = state.get("error_state") is None

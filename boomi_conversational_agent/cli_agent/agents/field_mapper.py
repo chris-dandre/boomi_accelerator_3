@@ -249,6 +249,12 @@ Map each entity to the best matching field based on:
 2. Semantic similarity
 3. Business context
 
+SPECIAL HANDLING FOR FIELD_INDICATOR ENTITIES:
+- FIELD_INDICATOR entities like "descriptions", "names", "titles" indicate which fields user wants to see
+- Map these to actual field names containing similar information
+- Example: "descriptions" → "DESCRIPTION" or "product_description" field
+- Example: "names" → "NAME", "FIRSTNAME", "LASTNAME", or "product_name" field
+
 Return JSON with format:
 {{
   "entity_text": {{
@@ -285,8 +291,53 @@ Only include mappings with confidence > 0.6. Focus on the most relevant mappings
             mapped_field = None
             confidence = 0.0
             
+            # FIELD_INDICATOR entities -> map to similar field names
+            if entity_type == 'FIELD_INDICATOR':
+                entity_lower = entity_text.lower()
+                
+                # Descriptions
+                if 'description' in entity_lower:
+                    for field_name in field_names:
+                        if 'description' in field_name.lower():
+                            mapped_field = field_name
+                            confidence = 0.90
+                            break
+                
+                # Names  
+                elif 'name' in entity_lower:
+                    # Prioritize specific name fields
+                    for field_name in field_names:
+                        if any(term in field_name.lower() for term in ['name', 'firstname', 'lastname']):
+                            mapped_field = field_name
+                            confidence = 0.90
+                            break
+                
+                # Titles
+                elif 'title' in entity_lower:
+                    for field_name in field_names:
+                        if 'title' in field_name.lower():
+                            mapped_field = field_name
+                            confidence = 0.90
+                            break
+                
+                # Prices
+                elif 'price' in entity_lower:
+                    for field_name in field_names:
+                        if any(term in field_name.lower() for term in ['price', 'cost', 'amount']):
+                            mapped_field = field_name
+                            confidence = 0.90
+                            break
+                
+                # Dates
+                elif 'date' in entity_lower:
+                    for field_name in field_names:
+                        if 'date' in field_name.lower():
+                            mapped_field = field_name
+                            confidence = 0.90
+                            break
+            
             # Brand entities -> ADVERTISER field (for Advertisements model) or brand_name field  
-            if entity_type == 'BRAND':
+            elif entity_type == 'BRAND':
                 if 'ADVERTISER' in field_names:
                     mapped_field = 'ADVERTISER'
                     confidence = 0.95
