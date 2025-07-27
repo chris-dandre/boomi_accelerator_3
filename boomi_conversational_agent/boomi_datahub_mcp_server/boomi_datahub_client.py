@@ -680,9 +680,13 @@ class BoomiDataHubClient:
                 field_id_elem = ET.SubElement(field_value, "fieldId")
                 field_id_elem.text = filter_def.get("fieldId", "")
                 
-                # Operator
+                # Operator - ensure underscores for Boomi compatibility
                 operator_elem = ET.SubElement(field_value, "operator")
-                operator_elem.text = filter_def.get("operator", "EQUALS")
+                operator = filter_def.get("operator", "EQUALS")
+                # Ensure proper format with underscores (IS_NOT_NULL not IS NOT NULL)
+                if " " in operator:
+                    operator = operator.replace(" ", "_")
+                operator_elem.text = operator
                 
                 # Value
                 value_elem = ET.SubElement(field_value, "value")
