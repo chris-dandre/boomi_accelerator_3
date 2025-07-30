@@ -74,6 +74,68 @@ class AgentPipeline:
             'response_generation'
         ]
     
+    def _perform_early_authorization(self, user_query: str, user_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Perform early authorization check to prevent unauthorized query processing
+        
+        Args:
+            user_query: The user's natural language query
+            user_context: User context including permissions
+            
+        Returns:
+            Authorization result with success status and details
+        """
+        try:
+            # Extract user permissions
+            permissions = user_context.get("permissions", [])
+            
+            # If user has read:all, allow all queries
+            if "read:all" in permissions or "write:all" in permissions:
+                return {"success": True, "message": "Full access granted"}
+            
+            # Quick model name detection in query
+            query_lower = user_query.lower()
+            
+            # Check for model references that user cannot access
+            unauthorized_models = []
+            
+            # Common model patterns to check
+            model_patterns = {
+                "users": ["user", "users", "user data", "user names", "user information"],
+                "employees": ["employee", "employees", "staff", "personnel"],
+                "customers": ["customer", "customers", "client", "clients"],
+                "products": ["product", "products", "item", "items"],
+                "orders": ["order", "orders", "purchase", "purchases"],
+                "companies": ["company", "companies", "organization", "organizations"]
+            }
+            
+            for model_name, patterns in model_patterns.items():
+                for pattern in patterns:
+                    if pattern in query_lower:
+                        # Check if user has permission for this model
+                        model_permission = f"read:{model_name}"
+                        if model_permission not in permissions:
+                            # Special case: advertisements is allowed for david.williams
+                            if model_name == "products" and "read:advertisements" in permissions:
+                                continue  # Allow products queries for advertisement users
+                            unauthorized_models.append(model_name)
+                            break
+            
+            if unauthorized_models:
+                return {
+                    "success": False,
+                    "message": f"Access denied: Insufficient permissions to query {', '.join(unauthorized_models)} data",
+                    "unauthorized_models": unauthorized_models
+                }
+            
+            return {"success": True, "message": "Authorization passed"}
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Authorization check failed: {str(e)}"
+            }
+    
     def process_query(self, user_query: str, user_context: Optional[Dict[str, Any]] = None,
                      enable_cache: bool = False) -> Dict[str, Any]:
         """
@@ -88,6 +150,32 @@ class AgentPipeline:
             Complete pipeline result with response and metadata
         """
         pipeline_start_time = time.time()
+        
+        # Perform early authorization check
+        if user_context:
+            auth_result = self._perform_early_authorization(user_query, user_context)
+            if not auth_result["success"]:
+                return {
+                    'success': False,
+                    'response': {
+                        'content': auth_result["message"],
+                        'response_type': 'authorization_denied',
+                        'query_intent': 'UNAUTHORIZED'
+                    },
+                    'query_intent': 'UNAUTHORIZED',
+                    'pipeline_metadata': {
+                        'authorization_failed': True,
+                        'authorization_message': auth_result["message"],
+                        'total_execution_time_ms': (time.time() - pipeline_start_time) * 1000,
+                        'pipeline_stage': 'authorization',
+                        'cache_hit': False
+                    },
+                    'query_results': {},
+                    'built_query': {},
+                    'entities': {},
+                    'discovered_models': [],
+                    'error': auth_result["message"]
+                }
         
         # Initialize MCPAgentState
         state = MCPAgentState(

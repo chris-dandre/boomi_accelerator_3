@@ -151,7 +151,35 @@ class MCPOAuthValidator:
             return required_scope in ["mcp:read", "mcp:execute"]
         elif "write:all" in user_permissions:
             return required_scope in ["mcp:read", "mcp:execute", "mcp:admin"]
+        elif "mcp:read" in user_permissions:
+            return required_scope == "mcp:read"
+        elif "mcp:execute" in user_permissions:
+            return required_scope in ["mcp:read", "mcp:execute"]
+        elif "mcp:admin" in user_permissions:
+            return required_scope in ["mcp:read", "mcp:execute", "mcp:admin"]
             
+        return False
+
+    @staticmethod
+    def check_data_access_permissions(token_payload: Dict[str, Any], model_name: str) -> bool:
+        """Check if user can access data from a specific model"""
+        user_id = token_payload.get("sub")
+        user_permissions = USER_SCOPES.get(user_id, ["none"])
+        
+        # Users with read:all or write:all can access any model data
+        if "read:all" in user_permissions or "write:all" in user_permissions:
+            return True
+            
+        # Check model-specific permissions
+        model_lower = model_name.lower()
+        
+        # Check for specific model permissions (e.g., read:advertisements)
+        for permission in user_permissions:
+            if permission.startswith("read:"):
+                allowed_model = permission.split(":", 1)[1].lower()
+                if allowed_model == model_lower:
+                    return True
+                    
         return False
 
 def get_boomi_client() -> BoomiDataHubClient:
@@ -663,7 +691,21 @@ async def query_records_rest(
         filters = request.get("filters", [])
         limit = request.get("limit", 100)
         
+        # Get model name to check data access permissions
         client = get_boomi_client()
+        model_details = client.get_model_by_id(model_id)
+        if not model_details:
+            raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
+        
+        model_name = model_details.get("name", "")
+        
+        # Check if user has permission to access this model's data
+        if not MCPOAuthValidator.check_data_access_permissions(token_payload, model_name):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: User lacks permission to access {model_name} data"
+            )
+        
         repository_id = "43212d46-1832-4ab1-820d-c0334d619f6f"  # Default repository
         
         result = client.query_records_by_parameters(
@@ -962,10 +1004,31 @@ def get_model_fields_direct(model_id: str) -> Dict[str, Any]:
             "model_id": model_id
         }
 
-def query_records_direct(model_id: str, fields: List[str] = None, filters: List[Dict[str, Any]] = None, limit: int = 100) -> Dict[str, Any]:
+def query_records_direct(model_id: str, fields: List[str] = None, filters: List[Dict[str, Any]] = None, limit: int = 100, token_payload: Dict[str, Any] = None) -> Dict[str, Any]:
     """Execute a query against a Boomi DataHub model (direct call)"""
     try:
         client = get_boomi_client()
+        
+        # Check data access permissions if token is provided
+        if token_payload:
+            # Get model name to check permissions
+            model_details = client.get_model_by_id(model_id)
+            if not model_details:
+                return {
+                    "status": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "error": f"Model '{model_id}' not found"
+                }
+            
+            model_name = model_details.get("name", "")
+            
+            # Check if user has permission to access this model's data
+            if not MCPOAuthValidator.check_data_access_permissions(token_payload, model_name):
+                return {
+                    "status": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "error": f"Access denied: User lacks permission to access {model_name} data"
+                }
         
         # Use the advanced query method
         repository_id = "43212d46-1832-4ab1-820d-c0334d619f6f"  # Default repository
@@ -1424,7 +1487,8 @@ def main():
                         arguments.get("model_id", ""),
                         arguments.get("fields", []),
                         arguments.get("filters", []),
-                        arguments.get("limit", 100)
+                        arguments.get("limit", 100),
+                        token_payload  # Pass token for data access control
                     )
                 elif tool_name == "search_models_by_name":
                     result = search_models_by_name_direct(arguments.get("name_pattern", ""))

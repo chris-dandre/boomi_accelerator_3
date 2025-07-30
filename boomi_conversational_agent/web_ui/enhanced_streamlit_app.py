@@ -897,10 +897,22 @@ class EnhancedSWXWebInterface:
         
         data_lines = lines[data_start_idx:]
         
-        # Find column positions by analyzing the header and first data row
-        headers = header_line.split()
+        # Parse fixed-width table format properly by detecting column positions
+        headers = []
+        col_positions = []
         
-        # Simple approach: split data rows by whitespace, but handle URLs specially
+        # Find column boundaries by looking for multiple spaces in the header
+        import re
+        # Split header by multiple spaces (2 or more) to detect columns
+        header_parts = re.split(r'  +', header_line.strip())
+        headers = [h.strip() for h in header_parts if h.strip()]
+        
+        # Find actual column positions in the text
+        current_pos = 0
+        for i, header in enumerate(headers):
+            pos = header_line.find(header, current_pos)
+            col_positions.append(pos)
+            current_pos = pos + len(header)
         html = '''
         <table style="font-family: 'Courier New', monospace; border-collapse: collapse; background-color: #f8f9fa; width: 100%; margin: 10px 0;">
             <thead>
@@ -913,32 +925,33 @@ class EnhancedSWXWebInterface:
         
         html += '</tr></thead><tbody>'
         
-        # Process data rows
+        # Process data rows using column positions
         for line in data_lines:
             if line.strip():
                 html += '<tr style="border-bottom: 1px solid #ddd;">'
                 
-                # Split line into columns - handle the case where we have product name and URL
-                parts = line.strip().split()
+                # Extract column data using the detected positions
+                col_data = []
+                for i, pos in enumerate(col_positions):
+                    if i < len(col_positions) - 1:
+                        # Extract text between this position and next position
+                        next_pos = col_positions[i + 1]
+                        cell_text = line[pos:next_pos].strip()
+                    else:
+                        # Last column - take everything from this position to end
+                        cell_text = line[pos:].strip()
+                    
+                    col_data.append(cell_text)
                 
-                # First column: product name (may contain spaces, so take everything before the URL)
-                url_match = re.search(r'https?://\S+', line)
-                if url_match:
-                    url_start = url_match.start()
-                    product_name = line[:url_start].strip()
-                    url = url_match.group(0)
-                    
-                    # Product name column
-                    html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{product_name}</td>'
-                    
-                    # URL column with clickable link
-                    clickable_url = f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; word-break: break-all;">{url}</a>'
-                    html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{clickable_url}</td>'
-                else:
-                    # Fallback: split by whitespace
-                    for i, part in enumerate(parts):
-                        if i < len(headers):
-                            html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{part}</td>'
+                # Add cells to HTML
+                for i, cell_text in enumerate(col_data):
+                    if i < len(headers):
+                        # Check if this cell contains a URL and make it clickable
+                        if re.match(r'https?://', cell_text):
+                            clickable_url = f'<a href="{cell_text}" target="_blank" style="color: #0066cc; text-decoration: underline; word-break: break-all;">{cell_text}</a>'
+                            html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{clickable_url}</td>'
+                        else:
+                            html += f'<td style="padding: 12px; border-right: 1px solid #ddd; vertical-align: top;">{cell_text}</td>'
                 
                 html += '</tr>'
         

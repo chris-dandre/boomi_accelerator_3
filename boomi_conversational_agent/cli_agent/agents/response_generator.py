@@ -743,74 +743,63 @@ Return only the response text, no JSON or formatting.
         # Get the most relevant fields based on query context
         relevant_fields = self._get_relevant_fields_for_query(data[0].keys(), user_query)
         
-        # Calculate column widths with minimum sizes for readability (3-field optimized)
+        # Calculate column widths based on content and field type
         col_widths = {}
-        num_fields = len(relevant_fields)
         
-        for i, field in enumerate(relevant_fields):
-            # Set optimal widths for 3-field display (total ~85 chars for terminal compatibility)
+        for field in relevant_fields:
+            # Start with header width
+            min_width = len(field)
+            
+            # Set base widths for specific field types
             if field == 'ADVERTISER':
-                base_width = 18  # Slightly smaller for 3-field layout
+                min_width = max(min_width, 18)
             elif field == 'PRODUCT':
-                base_width = 25  # Good size for product names
-            elif field in ['TARGET_MARKET_BRIEF', 'DESCRIPTION']:
-                base_width = 80  # Allow full content display with wrapping
-            else:
-                # Dynamic width based on position and remaining space
-                if i == 0:
-                    base_width = 18
-                elif i == 1:
-                    base_width = 25  
-                else:  # Third field
-                    base_width = 30
+                min_width = max(min_width, 20)
+            elif field in ['VIDEO_LINK', 'video_link', 'VIDEO_URL', 'video_url', 'link', 'url']:
+                min_width = max(min_width, 45)
             
-            col_widths[field] = max(base_width, len(field))
-            
-            # Check data lengths and adjust if needed (with reasonable limits)
+            # Check actual data content
+            max_content_width = min_width
             for item in data:
-                value_str = str(item.get(field, ''))
-                # Allow full width for description fields, cap others
-                if field in ['TARGET_MARKET_BRIEF', 'DESCRIPTION']:
-                    # No maximum width limit - show full content
-                    col_widths[field] = max(col_widths[field], len(value_str) + 1)
+                value = str(item.get(field, ''))
+                if field in ['VIDEO_LINK', 'video_link', 'VIDEO_URL', 'video_url', 'link', 'url']:
+                    # URLs can be longer but cap at reasonable width
+                    max_content_width = max(max_content_width, min(len(value), 55))
                 else:
-                    # Cap other fields to prevent extremely wide tables
-                    max_width = 30
-                    actual_width = min(len(value_str) + 1, max_width)
-                    col_widths[field] = max(col_widths[field], actual_width)
+                    # Other fields have stricter limits
+                    max_content_width = max(max_content_width, min(len(value), 25))
+            
+            col_widths[field] = max_content_width
         
-        # Create header row
+        # Build table
+        lines = []
+        
+        # Header line
         header_parts = []
-        separator_parts = []
         for field in relevant_fields:
             header_parts.append(field.ljust(col_widths[field]))
-            separator_parts.append('─' * col_widths[field])
+        lines.append("  ".join(header_parts))
         
-        table_lines = [
-            ' '.join(header_parts).rstrip(),
-            ' '.join(separator_parts).rstrip()
-        ]
+        # Separator line
+        separator_parts = []
+        for field in relevant_fields:
+            separator_parts.append("-" * col_widths[field])
+        lines.append("  ".join(separator_parts))
         
-        # Create data rows with full content for descriptions and clickable URLs
+        # Data lines
         for item in data:
             row_parts = []
             for field in relevant_fields:
                 value = str(item.get(field, ''))
                 
-                # Make URLs clickable (currently disabled for web compatibility)
-                value = self._make_urls_clickable(value, field)
+                # Truncate if necessary
+                if len(value) > col_widths[field]:
+                    value = value[:col_widths[field] - 3] + "..."
                 
-                # No truncation for description fields - show full content
-                if field in ['TARGET_MARKET_BRIEF', 'DESCRIPTION']:
-                    row_parts.append(value.ljust(col_widths[field]))
-                else:
-                    # Truncation only for non-description fields if needed
-                    if len(value) > col_widths[field] - 1:  # -1 for padding
-                        value = value[:col_widths[field] - 4] + "..."  # -4 for "..." + space
-                    row_parts.append(value.ljust(col_widths[field]))
-            table_lines.append(' '.join(row_parts).rstrip())
+                row_parts.append(value.ljust(col_widths[field]))
+            lines.append("  ".join(row_parts))
         
-        return '\n'.join(table_lines)
+        return "\n".join(lines)
     
     def _get_relevant_fields_for_query(self, available_fields, user_query: str) -> List[str]:
         """Get the most relevant fields to display based on query context"""
