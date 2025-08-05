@@ -613,17 +613,34 @@ Respond in JSON format:
         # Get query context for reasoning from metadata or analysis
         original_query = query_context.get('original_query', 'unknown query')
         
+        # Initialize reasoning trace for payload logging
+        reasoning_trace = []
+        
         filters = []
         
         # THOUGHT 1: Analyze the user's intent and query structure
-        print(f"   💭 THOUGHT: Analyzing query structure...")
+        thought1 = f"Analyzing query structure: '{original_query}' - {claude_analysis.get('query_type', 'unknown')} query with {len(field_mapping)} field mappings"
+        print(f"   💭 THOUGHT: {thought1}")
         print(f"      Query: '{original_query}'")
         print(f"      Claude Analysis: {claude_analysis.get('query_type', 'unknown')} query")
         print(f"      Distinct values requested: {claude_analysis.get('distinct_values_requested', False)}")
         print(f"      Field mappings: {[(entity, info.get('field_name')) for entity, info in field_mapping.items()]}")
         
+        reasoning_trace.append({
+            "step": "THOUGHT_1",
+            "type": "analysis",
+            "content": thought1,
+            "details": {
+                "query": original_query,
+                "query_type": claude_analysis.get('query_type', 'unknown'),
+                "distinct_values_requested": claude_analysis.get('distinct_values_requested', False),
+                "field_mappings": [(entity, info.get('field_name')) for entity, info in field_mapping.items()]
+            }
+        })
+        
         # THOUGHT 2: Determine if entities are filter values or field identifiers
-        print(f"   💭 THOUGHT: Are entities filter values or field identifiers?")
+        thought2 = f"Classifying {len(field_mapping)} entities as filter values or field identifiers"
+        print(f"   💭 THOUGHT: {thought2}")
         entity_analysis = {}
         
         for entity_text, mapping_info in field_mapping.items():
@@ -645,6 +662,15 @@ Respond in JSON format:
             print(f"      '{entity_text}' → {field_name}")
             print(f"         Generic term: {is_generic_term}, Specific value: {is_specific_value}")
             print(f"         Reasoning: {entity_analysis[entity_text]['reasoning']}")
+        
+        reasoning_trace.append({
+            "step": "THOUGHT_2",
+            "type": "classification",
+            "content": thought2,
+            "details": {
+                "entity_analysis": entity_analysis
+            }
+        })
         
         # ACTION 1: Decide whether to apply filters or get distinct values
         print(f"   🎯 ACTION: Determining filter strategy...")
@@ -699,13 +725,42 @@ Respond in JSON format:
                 # No filters - trust Claude's analysis that this should select all records
         
         # OBSERVATION: Report the final decision
-        print(f"   👁️  OBSERVATION: Created {len(filters)} filters using ReAct reasoning")
+        observation = f"Created {len(filters)} filters using ReAct reasoning"
+        print(f"   👁️  OBSERVATION: {observation}")
         
         if claude_analysis.get('distinct_values_requested'):
             distinct_field = claude_analysis.get('distinct_field', 'unknown')
             print(f"      Final action: Get distinct values from '{distinct_field}' field with {len(filters)} filters")
         else:
             print(f"      Final action: Execute regular query with {len(filters)} filters")
+        
+        reasoning_trace.append({
+            "step": "OBSERVATION",
+            "type": "result",
+            "content": observation,
+            "details": {
+                "filters_created": len(filters),
+                "distinct_values_requested": claude_analysis.get('distinct_values_requested', False),
+                "distinct_field": claude_analysis.get('distinct_field', 'unknown') if claude_analysis.get('distinct_values_requested') else None
+            }
+        })
+        
+        # Save ReAct reasoning payload if logging enabled
+        try:
+            from claude_payload_logger import claude_payload_logger
+            claude_payload_logger.save_query_building_payload(
+                field_mapping=field_mapping,
+                claude_analysis=claude_analysis,
+                query_context=query_context,
+                reasoning_trace=reasoning_trace,
+                final_filters=filters,
+                metadata={
+                    "react_steps": len(reasoning_trace),
+                    "original_query": original_query
+                }
+            )
+        except Exception as e:
+            print(f"⚠️  Failed to save query building payload: {e}")
             
         return filters
     

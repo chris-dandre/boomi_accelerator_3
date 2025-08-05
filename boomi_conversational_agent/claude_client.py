@@ -8,6 +8,14 @@ import time
 import random
 from typing import Dict, List, Any, Optional
 
+# Import payload logger for automatic payload saving
+try:
+    from claude_payload_logger import claude_payload_logger
+    PAYLOAD_LOGGING_ENABLED = True
+except ImportError:
+    PAYLOAD_LOGGING_ENABLED = False
+    print("⚠️  Claude payload logger not available")
+
 class ClaudeClient:
     """
     Claude API client for intelligent field mapping and model discovery
@@ -68,13 +76,15 @@ class ClaudeClient:
         """
         return self.query(prompt, max_tokens)
     
-    def query(self, prompt: str, max_tokens: int = 1000) -> str:
+    def query(self, prompt: str, max_tokens: int = 1000, save_payload: bool = True, payload_context: Dict[str, Any] = None) -> str:
         """
         Send a query to Claude
         
         Args:
             prompt: The prompt to send
             max_tokens: Maximum tokens in response
+            save_payload: Whether to save the query payload to logs
+            payload_context: Additional context for payload logging
             
         Returns:
             Claude's response as string
@@ -93,7 +103,26 @@ class ClaudeClient:
             return message.content[0].text
         
         try:
-            return self.retry_with_backoff(make_request)
+            response = self.retry_with_backoff(make_request)
+            
+            # Save payload if logging is enabled and requested
+            if save_payload and PAYLOAD_LOGGING_ENABLED:
+                try:
+                    context = payload_context or {}
+                    context.update({
+                        "model": "claude-sonnet-4-20250514",
+                        "max_tokens": max_tokens
+                    })
+                    claude_payload_logger.save_generic_claude_payload(
+                        payload_type="claude_query",
+                        prompt=prompt,
+                        response=response,
+                        context=context
+                    )
+                except Exception as e:
+                    print(f"⚠️  Failed to save Claude query payload: {e}")
+            
+            return response
         except Exception as e:
             print(f"❌ Claude API error after retries: {e}")
             raise
@@ -118,11 +147,34 @@ class ClaudeClient:
         prompt = self._build_field_mapping_prompt(entities, model_fields, query_context)
         
         try:
-            response = self.query(prompt, max_tokens=1500)
+            # Add field mapping context for payload logging
+            payload_context = {
+                "operation": "field_mapping",
+                "entities_count": len(entities),
+                "model_fields_count": len(model_fields),
+                "query_context": query_context
+            }
+            
+            response = self.query(prompt, max_tokens=1500, payload_context=payload_context)
             
             # Parse JSON response
             try:
                 mapping = json.loads(response)
+                
+                # Save specialized field mapping payload if logging enabled
+                if PAYLOAD_LOGGING_ENABLED:
+                    try:
+                        claude_payload_logger.save_field_mapping_payload(
+                            entities=entities,
+                            model_fields=model_fields,
+                            query_context=query_context,
+                            claude_prompt=prompt,
+                            claude_response=response,
+                            field_mapping=mapping
+                        )
+                    except Exception as e:
+                        print(f"⚠️  Failed to save field mapping payload: {e}")
+                
                 return mapping
             except json.JSONDecodeError:
                 # If response isn't valid JSON, try to extract JSON from it
@@ -130,6 +182,22 @@ class ClaudeClient:
                 json_match = re.search(r'\{.*\}', response, re.DOTALL)
                 if json_match:
                     mapping = json.loads(json_match.group())
+                    
+                    # Save payload even for extracted JSON
+                    if PAYLOAD_LOGGING_ENABLED:
+                        try:
+                            claude_payload_logger.save_field_mapping_payload(
+                                entities=entities,
+                                model_fields=model_fields,
+                                query_context=query_context,
+                                claude_prompt=prompt,
+                                claude_response=response,
+                                field_mapping=mapping,
+                                metadata={"json_extraction": True}
+                            )
+                        except Exception as e:
+                            print(f"⚠️  Failed to save field mapping payload: {e}")
+                    
                     return mapping
                 else:
                     print(f"⚠️  Could not parse Claude response as JSON: {response}")

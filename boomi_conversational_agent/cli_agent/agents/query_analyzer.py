@@ -289,7 +289,14 @@ Focus on semantic understanding - if they ask about "users", suggest the "users"
 """
         
         try:
-            response = self.claude_client.query(prompt, max_tokens=500)
+            # Add query analysis context for payload logging
+            payload_context = {
+                "operation": "query_analysis",
+                "user_query": user_query,
+                "available_models_count": len(available_models)
+            }
+            
+            response = self.claude_client.query(prompt, max_tokens=500, payload_context=payload_context)
             print(f"✅ Claude Analysis Complete")
             print(f"   Raw Response: {response[:200]}...")  # Show first 200 chars for debugging
             
@@ -329,6 +336,22 @@ Focus on semantic understanding - if they ask about "users", suggest the "users"
             
             # Store original query for reference
             analysis['original_query'] = user_query
+            
+            # Save specialized query analysis payload if logging enabled
+            try:
+                from claude_payload_logger import claude_payload_logger
+                claude_payload_logger.save_query_analysis_payload(
+                    user_query=user_query,
+                    claude_prompt=prompt,
+                    claude_response=response,
+                    parsed_analysis=analysis,
+                    metadata={
+                        "available_models_count": len(available_models) if available_models else 0,
+                        "extraction_method": "direct_json"
+                    }
+                )
+            except Exception as e:
+                print(f"⚠️  Failed to save query analysis payload: {e}")
             
             return analysis
             
